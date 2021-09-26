@@ -49,6 +49,12 @@ bool Application::Init(HINSTANCE hInstance)
 		return false;
 	}
 
+	mouse_tracking = false;
+	for (auto &elem : keystate)
+	{
+		elem = false;
+	}
+
 	return initGraphics();
 }
 
@@ -98,44 +104,34 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 {
 	switch (Msg)
 	{
-	/*case WM_MOUSEMOVE:
+	case WM_MOUSEMOVE:
 		{
-			if (active)
+			if (mouse_tracking)
 			{
-				int xdiff = LOWORD(lParam) - lastpos.x;
-				int ydiff = HIWORD(lParam) - lastpos.y;
+				int xdiff = LOWORD(lParam) - lastmouse.x;
+				int ydiff = HIWORD(lParam) - lastmouse.y;
 				if (xdiff || ydiff)
 				{
-					if (GetFocus() == hWnd)
-						CenterCursorPos();
-					inputmanager->AddMouseMovement(xdiff, ydiff);
+					camera.RotateY(xdiff / -500.f);
+					camera.RotateX(ydiff / -500.f);
 				}
 			}
-			else
-			{
-				lastpos.x = LOWORD(lParam);
-				lastpos.y = HIWORD(lParam);
-			}
+			lastmouse.x = LOWORD(lParam);
+			lastmouse.y = HIWORD(lParam);
 		}
 		break;
 	case WM_KEYDOWN:
-		inputmanager->AddInput(LOWORD(wParam), true);
+		keystate[static_cast<char>(LOWORD(wParam))] = true;
 		break;
 	case WM_KEYUP:
-		inputmanager->AddInput(LOWORD(wParam), false);
+		keystate[static_cast<char>(LOWORD(wParam))] = false;
 		break;
 	case WM_LBUTTONDOWN:
-		inputmanager->AddInput(VK_LBUTTON, true);
+		mouse_tracking = true;
 		break;
 	case WM_LBUTTONUP:
-		inputmanager->AddInput(VK_LBUTTON, false);
+		mouse_tracking = false;
 		break;
-	case WM_RBUTTONDOWN:
-		inputmanager->AddInput(VK_RBUTTON, true);
-		break;
-	case WM_RBUTTONUP:
-		inputmanager->AddInput(VK_RBUTTON, false);
-		break;*/
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		break;
@@ -170,7 +166,7 @@ bool Application::initGraphics()
 	camera.SetMaxXAngle(ToRadian(80.f));
 	camera.SetRoll(0.f);
 	
-	camera.SetEye(Vector3(1.5f, 1.5f, -4.f));
+	camera.SetEye(Vector3(1.2f, 1.2f, -3.f));
 	camera.SetLookat(Vector3(0.f, 0.f, 0.f));
 
 	stime = 0.f;
@@ -235,9 +231,70 @@ bool Application::initShaders()
 			return length(max(q, 0.f)) + min(max(q.x, max(q.y, q.z)), 0.f);
 		}
 
+		float fractal1(float3 p, uint depth)
+		{
+			float d = 1e20;
+			float3 abspos = abs(p);
+			float scale = 1.f;
+			for (uint iter = 0; iter < depth; ++iter)
+			{
+				float new_d = sdBox(abspos, float3(1.f, 1.f, 1.f)) / scale;
+				d = min(d, new_d);
+
+				if (abspos.z > abspos.y)
+				{
+					abspos.yz = abspos.zy;
+				}
+				if (abspos.y > abspos.x)
+				{
+					abspos.xy = abspos.yx;
+				}
+
+				abspos.x -= 4.f / 3.f;
+				abspos *= 3.f;
+				scale *= 3.f;
+			}
+			return d;
+		}
+
+		float fractal2(float3 p, uint depth)
+		{
+			float d = 1e20;
+			float3 abspos = abs(p);
+			float scale = 1.f;
+			for (uint iter = 0; iter < depth; ++iter)
+			{
+				float new_d = sdBox(abspos, float3(1.f, 1.f, 1.f)) / scale;
+				d = min(d, new_d);
+
+				if (abspos.z > abspos.y)
+				{
+					abspos.yz = abspos.zy;
+				}
+				if (abspos.y > abspos.x)
+				{
+					abspos.xy = abspos.yx;
+				}
+
+				if (abspos.y > 1.f / 3.f)
+				{
+					abspos.y -= 2.f / 3.f;
+				}
+				if (abspos.z > 1.f / 3.f)
+				{
+					abspos.z -= 2.f / 3.f;
+				}
+
+				abspos.x -= 10.f / 9.f;
+				abspos *= 9.f;
+				scale *= 9.f;
+			}
+			return d;
+		}
+
 		float map(float3 p)
 		{
-			return sdBox(p, float3(1.f, 1.f, 1.f));
+			return fractal2(p, 3);
 		}
 
 		float3 grad(float3 p, float baseline)
@@ -261,7 +318,7 @@ bool Application::initShaders()
 				{
 					float3 normal = grad(pos, d);
 					float shading = clamp(dot(normal, lighting_dir), 0.f, 1.f);
-					col = float3(1.f, 1.f, 0.f) * (1.f + shading) / 2.f;
+					col = float3(1.f, 1.f, 0.f) * shading;
 					break;
 				}
 				pos += dir * d;
@@ -432,4 +489,32 @@ void Application::render()
 void Application::updateSimulation(float dt)
 {
 	stime += dt;
+
+	Vector3 move = Vector3::NullVector();
+	if (keystate['W'])
+	{
+		move += Vector3(0.f, 0.f, +1.f);
+	}
+	if (keystate['S'])
+	{
+		move += Vector3(0.f, 0.f, -1.f);
+	}
+	if (keystate['A'])
+	{
+		move += Vector3(-1.f, 0.f, 0.f);
+	}
+	if (keystate['D'])
+	{
+		move += Vector3(+1.f, 0.f, 0.f);
+	}
+	if (keystate['Q'])
+	{
+		move += Vector3(0.f, +1.f, 0.f);
+	}
+	if (keystate['E'])
+	{
+		move += Vector3(0.f, -1.f, 0.f);
+	}
+
+	camera.MoveRel(move * dt);
 }

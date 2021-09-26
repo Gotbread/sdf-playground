@@ -46,4 +46,8 @@ private:
 
 	Camera camera;
 	float stime;
+
+	POINT lastmouse;
+	bool mouse_tracking;
+	bool keystate[256];
 };
