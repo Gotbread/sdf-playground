@@ -261,25 +261,45 @@ bool Application::initShaders()
 					center = false;
 				}
 
-				/*if (center)
+				if (center)
 				{
 					abspos.x -= 4.f / 3.f;
 					abspos *= 3.f;
 					scale *= 3.f;
 				}
-				else*/
+				else
 				{
 					abspos.x -= 10.f / 9.f;
 					abspos *= 9.f;
 					scale *= 9.f;
 				}
+
+				abspos = abs(abspos);
 			}
 			return d;
 		}
 
 		float map(float3 p)
 		{
-			return fractal(p, 3);
+			return sdBox(p, float3(1.f, 1.f, 1.f));
+
+			//return fractal(p, 2);
+		}
+
+		float map_debug(float3 p, out bool color_distance)
+		{
+			float distance_cut_plane = -p.z;
+			float distance_scene = map(p);
+			if (distance_cut_plane < distance_scene)
+			{
+				color_distance = true;
+				return distance_cut_plane;
+			}
+			else
+			{
+				color_distance = false;
+				return distance_scene;
+			}
 		}
 
 		float3 grad(float3 p, float baseline)
@@ -296,14 +316,29 @@ bool Application::initShaders()
 
 			float3 pos = eye;
 			float3 col = float3(0.1f, 0.1f, 0.f);
+			bool color_distance = false;
+			float ruler_scale = 0.2f;
 			for (uint iter = 0; iter < 100; ++iter)
 			{
-				float d = map(pos);
+				float d = map_debug(pos, color_distance);
 				if (d < dist_eps)
 				{
-					float3 normal = grad(pos, d);
-					float shading = clamp(dot(normal, lighting_dir), 0.f, 1.f);
-					col = float3(1.f, 1.f, 0.f) * shading;
+					if (color_distance)
+					{
+						float scene_distance = map(pos);
+						float int_steps;
+						float frac_steps = modf(scene_distance / ruler_scale, int_steps) * 1.2f;
+						float band_steps = modf(int_steps / 5.f, int_steps);
+						
+						float3 band_color = band_steps > 0.7f ? float3(1.f, 0.25f, 0.25f) : float3(0.75f, 0.75f, 1.f);
+						col = frac_steps < 1.f ? frac_steps * frac_steps * float3(1.f, 1.f, 1.f) : band_color;
+					}
+					else
+					{
+						float3 normal = grad(pos, d);
+						float shading = clamp(dot(normal, lighting_dir), 0.f, 1.f);
+						col = float3(1.f, 1.f, 0.f) * shading;
+					}
 					break;
 				}
 				pos += dir * d;
