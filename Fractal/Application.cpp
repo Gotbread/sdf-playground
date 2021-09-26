@@ -21,13 +21,13 @@ bool Application::Init(HINSTANCE hInstance)
 
 	RegisterClass(&wc);
 
-	bool fullscreen = false;
+	bool fullscreen = true;
 	std::string title = "SDF Fractal";
 
 	if (fullscreen)
 	{
-		unsigned width = 800;
-		unsigned height = 600;
+		unsigned width = GetSystemMetrics(SM_CXSCREEN);
+		unsigned height = GetSystemMetrics(SM_CYSCREEN);
 		hWnd = CreateWindow(wc.lpszClassName, title.c_str(), WS_POPUP, 0, 0, width, height, 0, 0, hInstance, this);
 	}
 	else
@@ -122,6 +122,10 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 		break;
 	case WM_KEYDOWN:
 		keystate[static_cast<char>(LOWORD(wParam))] = true;
+		if (LOWORD(wParam) == VK_ESCAPE)
+		{
+			PostQuitMessage(0);
+		}
 		break;
 	case WM_KEYUP:
 		keystate[static_cast<char>(LOWORD(wParam))] = false;
@@ -166,7 +170,7 @@ bool Application::initGraphics()
 	camera.SetMaxXAngle(ToRadian(80.f));
 	camera.SetRoll(0.f);
 	
-	camera.SetEye(Vector3(1.2f, 1.2f, -3.f));
+	camera.SetEye(Vector3(1.2f, 1.2f, -5.f));
 	camera.SetLookat(Vector3(0.f, 0.f, 0.f));
 
 	stime = 0.f;
@@ -292,9 +296,46 @@ bool Application::initShaders()
 			return d;
 		}
 
+		float fractal3(float3 p, uint depth)
+		{
+			float3 a1 = float3(+1.f, +1.f, +1.f);
+			float3 a2 = float3(-1.f, -1.f, +1.f);
+			float3 a3 = float3(+1.f, -1.f, -1.f);
+			float3 a4 = float3(-1.f, +1.f, -1.f);
+
+			float scale = 2.f;
+			for (uint iter = 0; iter < depth; ++iter)
+			{
+				float3 c = a1;
+				float dist = length(p - a1);
+				float d = length(p - a2);
+				if (d < dist)
+				{
+					c = a2;
+					dist = d;
+				}
+				d = length(p - a3);
+				if (d < dist)
+				{
+					c = a3;
+					dist = d;
+				}
+				d = length(p - a4);
+				if (d < dist)
+				{
+					c = a4;
+					dist = d;
+				}
+
+				p = scale * p - c * (scale - 1.f);
+			}
+
+			return length(p) / pow(scale, depth) - 2 * dist_eps;
+		}
+
 		float map(float3 p)
 		{
-			return fractal2(p, 3);
+			return fractal3(p, 10);
 		}
 
 		float3 grad(float3 p, float baseline)
@@ -310,15 +351,16 @@ bool Application::initShaders()
 			float3 dir = normalize(front_vec + input.screenpos.x * right_vec + input.screenpos.y * top_vec);
 
 			float3 pos = eye;
-			float3 col = float3(0.1f, 0.1f, 0.f);
+			float3 col = float3(1.f, 1.f, 1.f);
 			for (uint iter = 0; iter < 100; ++iter)
 			{
 				float d = map(pos);
 				if (d < dist_eps)
 				{
-					float3 normal = grad(pos, d);
-					float shading = clamp(dot(normal, lighting_dir), 0.f, 1.f);
-					col = float3(1.f, 1.f, 0.f) * shading;
+					//float3 normal = grad(pos, d);
+					//float shading = clamp(dot(normal, lighting_dir), 0.f, 1.f);
+					//col = float3(1.f, 1.f, 0.f) * shading;
+					col.rgb = iter * 0.01f;
 					break;
 				}
 				pos += dir * d;
