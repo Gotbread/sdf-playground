@@ -22,9 +22,11 @@ cbuffer camera
 };
 
 
-static const float dist_eps = 0.001f;
-static const float grad_eps = 0.001f;
+static const float dist_eps = 0.0001f;
+static const float grad_eps = 0.0001f;
 static const float3 lighting_dir = normalize(float3(-3.f, -1.f, 2.f));
+
+static const float debug_ruler_scale = 0.2f;
 
 
 float turbulence(float3 pos)
@@ -41,13 +43,24 @@ float3 marble(float3 pos)
 	return float3(0.556f, 0.478f, 0.541f) * sine_val;
 }
 
+float3 debug_plane_color(float scene_distance)
+{
+	float int_steps;
+	float frac_steps = abs(modf(scene_distance / debug_ruler_scale, int_steps)) * 1.2f;
+	float band_steps = modf(int_steps / 5.f, int_steps);
+
+	float3 band_color = band_steps > 0.7f ? float3(1.f, 0.25f, 0.25f) : float3(0.75f, 0.75f, 1.f);
+	float3 col = frac_steps < 1.f ? frac_steps * frac_steps * float3(1.f, 1.f, 1.f) : band_color;
+	col.g = scene_distance < 0.f ? (scene_distance > -0.01f ? 1.f : 0.f) : col.g;
+	return col;
+}
 
 
 float map_debug(float3 p, out bool color_distance)
 {
 	float distance_cut_plane = -p.z;
 	float distance_scene = map(p);
-	if (distance_cut_plane < distance_scene || true)
+	if (distance_cut_plane < distance_scene)
 	{
 		color_distance = true;
 		return distance_cut_plane;
@@ -74,7 +87,6 @@ void ps_main(ps_input input, out ps_output output)
 	float3 pos = eye;
 	float3 col = float3(0.1f, 0.1f, 0.f);
 	bool color_distance = false;
-	float ruler_scale = 0.2f;
 	for (uint iter = 0; iter < 100; ++iter)
 	{
 		float d = map_debug(pos, color_distance);
@@ -83,13 +95,7 @@ void ps_main(ps_input input, out ps_output output)
 			if (color_distance)
 			{
 				float scene_distance = map(pos);
-				float int_steps;
-				float frac_steps = abs(modf(scene_distance / ruler_scale, int_steps)) * 1.2f;
-				float band_steps = modf(int_steps / 5.f, int_steps);
-						
-				float3 band_color = band_steps > 0.7f ? float3(1.f, 0.25f, 0.25f) : float3(0.75f, 0.75f, 1.f);
-				col = frac_steps < 1.f ? frac_steps * frac_steps * float3(1.f, 1.f, 1.f) : band_color;
-				col.g = scene_distance < 0.f ? (scene_distance > -0.01f ? 1.f : 0.f) : col.g;
+				col = debug_plane_color(scene_distance);
 			}
 			else
 			{

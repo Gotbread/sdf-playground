@@ -20,30 +20,18 @@ float fractal(float3 p, uint depth)
 			abspos.xy = abspos.yx;
 		}
 
-		bool center = true;/*
 		if (abspos.y > 1.f / 3.f)
 		{
 			abspos.y -= 2.f / 3.f;
-			center = false;
 		}
 		if (abspos.z > 1.f / 3.f)
 		{
 			abspos.z -= 2.f / 3.f;
-			center = false;
-		}*/
+		}
 
-		if (center)
-		{
-			abspos.x -= 4.f / 3.f;
-			abspos *= 3.f;
-			scale *= 3.f;
-		}
-		else
-		{
-			abspos.x -= 10.f / 9.f;
-			abspos *= 9.f;
-			scale *= 9.f;
-		}
+		abspos.x -= 10.f / 9.f;
+		abspos *= 9.f;
+		scale *= 9.f;
 
 		abspos = abs(abspos);
 	}
@@ -52,9 +40,5 @@ float fractal(float3 p, uint depth)
 
 float map(float3 p)
 {
-	/*float d1 = sdBox(p, float3(1.f, 1.f, 1.f));
-	float d2 = sdSphere(p - float3(0.f, 2.f, 0.f), 1.f);
-	return smin(d1, d2, 0.5f);*/
-
-	return fractal(p, 6);
+	return fractal(p, 4);
 }
