@@ -2,6 +2,7 @@
 
 #include <Windows.h>
 #include <memory>
+#include <string>
 
 #include "Graphics.h"
 #include "Camera.h"
@@ -33,6 +34,8 @@ private:
 	bool initGeometry();
 	void render();
 	void updateSimulation(float dt);
+
+	Comptr<ID3DBlob> compileShader(const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings = true, bool disassemble = false);
 
 	HINSTANCE hInstance;
 	HWND hWnd;
