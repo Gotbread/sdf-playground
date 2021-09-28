@@ -48,4 +48,12 @@
       <Filter>Headerdateien</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="PixelShader.hlsl">
+      <Filter>Ressourcendateien</Filter>
+    </FxCompile>
+    <FxCompile Include="VertexShader.hlsl">
+      <Filter>Ressourcendateien</Filter>
+    </FxCompile>
+  </ItemGroup>
 </Project>
