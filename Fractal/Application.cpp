@@ -515,6 +515,10 @@ void Application::updateSimulation(float dt)
 	{
 		move += Vector3(0.f, -1.f, 0.f);
 	}
+	if (keystate[VK_SHIFT])
+	{
+		move *= 3.0f;
+	}
 
 	camera.MoveRel(move * dt);
 }
