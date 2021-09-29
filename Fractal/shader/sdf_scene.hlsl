@@ -38,7 +38,17 @@ float fractal(float3 p, uint depth)
 	return d;
 }
 
-float map(float3 p)
+
+float sdGyroid(float3 p)
 {
-	return fractal(p, 4);
+	return dot(sin(p.xyz), cos(p.zxy));
+}
+
+float map(float3 p, float3 dir)
+{
+	float gyroid = abs(sdGyroid(p * 7.f) / 7.f) - 0.03f;
+	float box = sdBox(p, float3(1.f, 1.f, 1.f));
+	return max(gyroid, box);
+	//return sdBox(p, float3(1.f, 1.f, 1.f)) - 0.05f;
+	//return fractal(p, 2);
 }

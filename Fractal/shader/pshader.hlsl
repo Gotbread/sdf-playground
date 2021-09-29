@@ -24,6 +24,8 @@ cbuffer camera
 
 static const float dist_eps = 0.0001f;
 static const float grad_eps = 0.0001f;
+static const float max_dist = 3e30;
+static const float max_dist_check = 1e30;
 static const float3 lighting_dir = normalize(float3(-3.f, -1.f, 2.f));
 
 static const float debug_ruler_scale = 0.2f;
@@ -50,17 +52,29 @@ float3 debug_plane_color(float scene_distance)
 	float band_steps = modf(int_steps / 5.f, int_steps);
 
 	float3 band_color = band_steps > 0.7f ? float3(1.f, 0.25f, 0.25f) : float3(0.75f, 0.75f, 1.f);
+	frac_steps = scene_distance < 5.f ? frac_steps : 0.5f;
 	float3 col = frac_steps < 1.f ? frac_steps * frac_steps * float3(1.f, 1.f, 1.f) : band_color;
 	col.g = scene_distance < 0.f ? (scene_distance > -0.01f ? 1.f : 0.f) : col.g;
 	return col;
 }
 
-
-float map_debug(float3 p, out bool color_distance)
+float sdPlane(float3 p, float3 plane_point, float3 plane_norm)
 {
-	float distance_cut_plane = -p.z;
-	float distance_scene = map(p);
-	if (distance_cut_plane < distance_scene)
+	return dot(p - plane_point, plane_norm);
+}
+
+float sdPlaneFast(float3 p, float3 dir, float3 plane_point, float3 plane_norm)
+{
+	float plane_dist = dot(p - plane_point, plane_norm);
+	float scale = dot(dir, -plane_norm);
+	return plane_dist / saturate(scale);
+}
+
+float map_debug(float3 p, float3 dir, out bool color_distance)
+{
+	float distance_cut_plane = sdPlaneFast(p, dir, float3(0.f, 0.f, 0.f), normalize(float3(0.f, 1.f, -1.f)));
+	float distance_scene = map(p, dir);
+	if (distance_cut_plane < distance_scene && false)
 	{
 		color_distance = true;
 		return distance_cut_plane;
@@ -74,9 +88,9 @@ float map_debug(float3 p, out bool color_distance)
 
 float3 grad(float3 p, float baseline)
 {
-	float d1 = map(p - float3(grad_eps, 0.f, 0.f)) - baseline;
-	float d2 = map(p - float3(0.f, grad_eps, 0.f)) - baseline;
-	float d3 = map(p - float3(0.f, 0.f, grad_eps)) - baseline;
+	float d1 = map(p - float3(grad_eps, 0.f, 0.f), float3(0.f, 0.f, 0.f)) - baseline;
+	float d2 = map(p - float3(0.f, grad_eps, 0.f), float3(0.f, 0.f, 0.f)) - baseline;
+	float d3 = map(p - float3(0.f, 0.f, grad_eps), float3(0.f, 0.f, 0.f)) - baseline;
 	return normalize(float3(d1, d2, d3));
 }
 
@@ -89,12 +103,13 @@ void ps_main(ps_input input, out ps_output output)
 	bool color_distance = false;
 	for (uint iter = 0; iter < 100; ++iter)
 	{
-		float d = map_debug(pos, color_distance);
+		float d = map_debug(pos, dir, color_distance);
 		if (d < dist_eps)
 		{
 			if (color_distance)
 			{
-				float scene_distance = map(pos);
+				//col = iter / 255.f;
+				float scene_distance = map(pos, dir);
 				col = debug_plane_color(scene_distance);
 			}
 			else
@@ -103,11 +118,16 @@ void ps_main(ps_input input, out ps_output output)
 				float diffuse_shading = clamp(dot(normal, lighting_dir), 0.f, 1.f);
 				float3 specular_ref = reflect(lighting_dir, normal);
 				float specular_shading = pow(saturate(dot(specular_ref, -dir)), 12.f);
-				float3 marble_color = marble(pos);
+				//float3 marble_color = marble(pos);
+				float3 diffuse_color = float3(0.f, 0.5f, 1.f);
 				float3 specular_color = float3(1.f, 1.f, 1.f);
 
-				col = marble_color * diffuse_shading + specular_color * specular_shading;
+				col = diffuse_color * diffuse_shading + specular_color * specular_shading;
 			}
+			break;
+		}
+		else if (d > max_dist_check)
+		{
 			break;
 		}
 		pos += dir * d;
