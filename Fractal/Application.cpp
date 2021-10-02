@@ -30,7 +30,7 @@ bool Application::Init(HINSTANCE hInstance)
 	if (fullscreen)
 	{
 		unsigned width = GetSystemMetrics(SM_CXSCREEN);
-		unsigned height = GetSystemMetrics(SM_CXSCREEN);
+		unsigned height = GetSystemMetrics(SM_CYSCREEN);
 		hWnd = CreateWindow(wc.lpszClassName, title.c_str(), WS_POPUP, 0, 0, width, height, 0, 0, hInstance, this);
 	}
 	else
