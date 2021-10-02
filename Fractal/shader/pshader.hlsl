@@ -45,6 +45,17 @@ float3 marble(float3 pos)
 	return float3(0.556f, 0.478f, 0.541f) * sine_val;
 }
 
+float3 wood(float3 pos)
+{
+	static const float turbulence_scale = 0.125f;
+	static const float rings = 12.f;
+
+	float dist = sqrt(pos.x * pos.x + pos.y * pos.y) + turbulence_scale * turbulence(pos);
+	float sine_val = 0.5f * abs(sin(2 * rings * dist * 3.14159));
+
+	return float3(0.3125f + sine_val, 0.117f + sine_val, 0.117f);
+}
+
 float3 debug_plane_color(float scene_distance)
 {
 	float int_steps;
@@ -58,40 +69,68 @@ float3 debug_plane_color(float scene_distance)
 	return col;
 }
 
-float sdPlane(float3 p, float3 plane_point, float3 plane_norm)
+float2 map_debug(float3 p, float3 dir, out float3 material_property)
 {
-	return dot(p - plane_point, plane_norm);
-}
-
-float sdPlaneFast(float3 p, float3 dir, float3 plane_point, float3 plane_norm)
-{
-	float plane_dist = dot(p - plane_point, plane_norm);
-	float scale = dot(dir, -plane_norm);
-	return plane_dist / saturate(scale);
-}
-
-float map_debug(float3 p, float3 dir, out bool color_distance)
-{
-	float distance_cut_plane = sdPlaneFast(p, dir, float3(0.f, 0.f, 0.f), normalize(float3(0.f, 1.f, -1.f)));
-	float distance_scene = map(p, dir);
-	if (distance_cut_plane < distance_scene && false)
+	float distance_cut_plane = sdPlaneFast(p, dir, float3(0.f, 0.f, 0.f), normalize(float3(0.f, 0.f, -1.f)));
+	float2 distance_scene = map(p, dir, material_property);
+	if (distance_cut_plane < distance_scene.x && false)
 	{
-		color_distance = true;
-		return distance_cut_plane;
+		material_property = debug_plane_color(distance_scene.x);
+		return float2(distance_cut_plane, 0.f);
 	}
 	else
 	{
-		color_distance = false;
 		return distance_scene;
 	}
 }
 
 float3 grad(float3 p, float baseline)
 {
-	float d1 = map(p - float3(grad_eps, 0.f, 0.f), float3(0.f, 0.f, 0.f)) - baseline;
-	float d2 = map(p - float3(0.f, grad_eps, 0.f), float3(0.f, 0.f, 0.f)) - baseline;
-	float d3 = map(p - float3(0.f, 0.f, grad_eps), float3(0.f, 0.f, 0.f)) - baseline;
+	float3 unused;
+	float d1 = map(p - float3(grad_eps, 0.f, 0.f), float3(0.f, 0.f, 0.f), unused).x - baseline;
+	float d2 = map(p - float3(0.f, grad_eps, 0.f), float3(0.f, 0.f, 0.f), unused).x - baseline;
+	float d3 = map(p - float3(0.f, 0.f, grad_eps), float3(0.f, 0.f, 0.f), unused).x - baseline;
 	return normalize(float3(d1, d2, d3));
+}
+
+float4 colorize(float3 pos, float3 dir, float scene_distance, float material_id, float3 material_property)
+{
+	float3 col; // the output color
+
+	// now select the material id
+	if (material_id == 0.f) // 0 = debug plane
+	{
+		col = material_property;
+	}
+	else if (material_id == 1.f) // 1 = solid color
+	{
+		col = material_property;
+	}
+	else // all other colors are with shading now
+	{
+		float3 diffuse_color = float3(0.5f, 0.5f, 0.5f);
+		if (material_id == 2.f) // 2 = solid color with shading
+		{
+			diffuse_color = material_property;
+		}
+		else if (material_id == 3.f) // 3 = marble
+		{
+			diffuse_color = marble(material_property);
+		}
+		else if (material_id == 4.f) // 4 = wood
+		{
+			diffuse_color = wood(material_property);
+		}
+
+		float3 normal = grad(pos, scene_distance);
+		float diffuse_shading = clamp(dot(normal, lighting_dir), 0.05f, 1.f);
+		float3 specular_ref = reflect(lighting_dir, normal);
+		float specular_shading = pow(saturate(dot(specular_ref, -dir)), 12.f);
+		float3 specular_color = float3(1.f, 1.f, 1.f);
+
+		col = diffuse_color * diffuse_shading + specular_color * specular_shading;
+	}
+	return float4(col, 1.f);
 }
 
 void ps_main(ps_input input, out ps_output output)
@@ -99,39 +138,22 @@ void ps_main(ps_input input, out ps_output output)
 	float3 dir = normalize(front_vec + input.screenpos.x * right_vec + input.screenpos.y * top_vec);
 
 	float3 pos = eye;
-	float3 col = float3(0.1f, 0.1f, 0.f);
-	bool color_distance = false;
+	float4 col = float4(0.1f, 0.1f, 0.f, 1.f);
 	for (uint iter = 0; iter < 100; ++iter)
 	{
-		float d = map_debug(pos, dir, color_distance);
-		if (d < dist_eps)
+		float3 material_property;
+		float2 scene_distance = map_debug(pos, dir, material_property);
+		if (scene_distance.x < dist_eps)
 		{
-			if (color_distance)
-			{
-				//col = iter / 255.f;
-				float scene_distance = map(pos, dir);
-				col = debug_plane_color(scene_distance);
-			}
-			else
-			{
-				float3 normal = grad(pos, d);
-				float diffuse_shading = clamp(dot(normal, lighting_dir), 0.f, 1.f);
-				float3 specular_ref = reflect(lighting_dir, normal);
-				float specular_shading = pow(saturate(dot(specular_ref, -dir)), 12.f);
-				//float3 marble_color = marble(pos);
-				float3 diffuse_color = float3(0.f, 0.5f, 1.f);
-				float3 specular_color = float3(1.f, 1.f, 1.f);
-
-				col = diffuse_color * diffuse_shading + specular_color * specular_shading;
-			}
+			col = colorize(pos, dir, scene_distance.x, scene_distance.y, material_property);
 			break;
 		}
-		else if (d > max_dist_check)
+		else if (scene_distance.x > max_dist_check)
 		{
 			break;
 		}
-		pos += dir * d;
+		pos += dir * scene_distance.x;
 	}
 
-	output.color = float4(col, 1.f);
+	output.color = col;
 };
