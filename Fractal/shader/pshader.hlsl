@@ -28,7 +28,7 @@ static const float max_dist = 3e30;
 static const float max_dist_check = 1e30;
 static const float3 lighting_dir = normalize(float3(-3.f, -1.f, 2.f));
 
-static const float debug_ruler_scale = 0.2f;
+static const float debug_ruler_scale = 0.1f;
 
 
 float turbulence(float3 pos)
@@ -71,7 +71,7 @@ float3 debug_plane_color(float scene_distance)
 
 float2 map_debug(float3 p, float3 dir, out float3 material_property)
 {
-	float distance_cut_plane = sdPlaneFast(p, dir, float3(0.f, 0.f, 0.f), normalize(float3(0.f, 0.f, -1.f)));
+	float distance_cut_plane = sdPlaneFast(p, dir, normalize(float3(0.f, 0.f, -1.f)));
 	float2 distance_scene = map(p, dir, material_property);
 	if (distance_cut_plane < distance_scene.x && false)
 	{

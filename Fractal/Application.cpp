@@ -172,7 +172,7 @@ bool Application::initGraphics()
 	camera.SetMinXAngle(ToRadian(80.f));
 	camera.SetMaxXAngle(ToRadian(80.f));
 	camera.SetRoll(0.f);
-	
+
 	camera.SetEye(Vector3(2.5f, 1.5f, -4.5f));
 	camera.SetLookat(Vector3(0.f, -1.5f, 0.f));
 
