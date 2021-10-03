@@ -124,10 +124,17 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 		}
 		break;
 	case WM_KEYDOWN:
+		// for movement
 		keystate[static_cast<char>(LOWORD(wParam))] = true;
-		if (LOWORD(wParam) == VK_ESCAPE)
+		// for events
+		switch (LOWORD(wParam))
 		{
+		case VK_ESCAPE: // quit
 			PostQuitMessage(0);
+			break;
+		case 'R': // reload shader
+			initShaders();
+			break;
 		}
 		break;
 	case WM_KEYUP:
@@ -173,8 +180,8 @@ bool Application::initGraphics()
 	camera.SetMaxXAngle(ToRadian(80.f));
 	camera.SetRoll(0.f);
 
-	camera.SetEye(Vector3(0.f, 0.f, -4.5f));
-	camera.SetLookat(Vector3(0.f, 0.f, 0.f));
+	camera.SetEye(Vector3(0.f, 2.f, -3.f));
+	camera.SetLookat(Vector3(0.f, 1.f, 0.f));
 
 	stime = 0.f;
 
@@ -232,6 +239,16 @@ Comptr<ID3DBlob> Application::compileShader(const std::string &filename, const s
 
 bool Application::initShaders()
 {
+	auto context = graphics->GetContext();
+
+	// remove old objects. since d3d keeps a reference internally
+	// the object is not freed yet. setting it to zero ensures
+	// we dont overwrite it later and loose the pointer.
+	// once we set the new objects in the pipeline, the old ones will get released anyway
+	v_shader = nullptr;
+	p_shader = nullptr;
+	input_layout = nullptr;
+
 	UINT flags =
 #ifdef _DEBUG
 		D3DCOMPILE_DEBUG |
@@ -255,7 +272,6 @@ bool Application::initShaders()
 	if (FAILED(hr))
 		return false;
 	
-	auto context = graphics->GetContext();
 	context->VSSetShader(v_shader, nullptr, 0);
 	context->PSSetShader(p_shader, nullptr, 0);
 
@@ -332,41 +348,45 @@ bool Application::initGeometry()
 
 void Application::render()
 {
-	float clear_color[4] = {0.2f, 0.f, 0.f, 0.f};
+	float clear_color[4] = {0.25f, 0.f, 0.f, 0.f};
 	auto ctx = graphics->GetContext();
 	ctx->ClearRenderTargetView(graphics->GetMainRendertargetView(), clear_color);
 	ctx->ClearDepthStencilView(graphics->GetMainDepthStencilView(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.f, 0);
 
-	D3D11_MAPPED_SUBRESOURCE sub;
-	ctx->Map(camera_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &sub);
-	camera_cbuffer *cam_buf = static_cast<camera_cbuffer *>(sub.pData);
-	cam_buf->eye = camera.GetEye();
-	cam_buf->front_vec = camera.GetDirection();
-	cam_buf->right_vec = (camera.GetFrustrumEdge(0) - camera.GetFrustrumEdge(3)) * 0.5f;
-	cam_buf->top_vec = (camera.GetFrustrumEdge(0) - camera.GetFrustrumEdge(1)) * 0.5f;
-	cam_buf->stime = stime;
-
-	ctx->Unmap(camera_buffer, 0);
-	ctx->PSSetConstantBuffers(0, 1, &camera_buffer);
-
-	UINT v_strides[] =
+	// only render something if the shader step was successful, else show a blank screen
+	if (v_shader && p_shader && input_layout)
 	{
-		sizeof(Vertex),
-	};
-	UINT v_offsets[] =
-	{
-		0,
-	};
-	ID3D11Buffer *vertex_buffers[] =
-	{
-		vertex_buffer,
-	};
-	ctx->IASetVertexBuffers(0, 1, vertex_buffers, v_strides, v_offsets);
-	ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		D3D11_MAPPED_SUBRESOURCE sub;
+		ctx->Map(camera_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &sub);
+		camera_cbuffer *cam_buf = static_cast<camera_cbuffer *>(sub.pData);
+		cam_buf->eye = camera.GetEye();
+		cam_buf->front_vec = camera.GetDirection();
+		cam_buf->right_vec = (camera.GetFrustrumEdge(0) - camera.GetFrustrumEdge(3)) * 0.5f;
+		cam_buf->top_vec = (camera.GetFrustrumEdge(0) - camera.GetFrustrumEdge(1)) * 0.5f;
+		cam_buf->stime = stime;
 
-	ctx->IASetIndexBuffer(index_buffer, DXGI_FORMAT_R16_UINT, 0);
+		ctx->Unmap(camera_buffer, 0);
+		ctx->PSSetConstantBuffers(0, 1, &camera_buffer);
 
-	ctx->DrawIndexed(6, 0, 0);
+		UINT v_strides[] =
+		{
+			sizeof(Vertex),
+		};
+		UINT v_offsets[] =
+		{
+			0,
+		};
+		ID3D11Buffer *vertex_buffers[] =
+		{
+			vertex_buffer,
+		};
+		ctx->IASetVertexBuffers(0, 1, vertex_buffers, v_strides, v_offsets);
+		ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		ctx->IASetIndexBuffer(index_buffer, DXGI_FORMAT_R16_UINT, 0);
+
+		ctx->DrawIndexed(6, 0, 0);
+	}
 
 	graphics->Present();
 	graphics->WaitForVBlank();
