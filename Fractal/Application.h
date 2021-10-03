@@ -25,7 +25,10 @@ private:
 		alignas(16) Math3D::Vector3 eye;
 		alignas(16) Math3D::Vector3 front_vec, right_vec, top_vec;
 		alignas(16) Math3D::Vector3 debug_plane_point, debug_plane_normal;
-		alignas(16) float stime;
+		alignas(16) struct
+		{
+			float stime, free_param;
+		} params;
 	};
 
 	LRESULT CALLBACK WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
@@ -51,7 +54,7 @@ private:
 
 	Camera camera;
 	float stime;
-	float scroll_pos1, scroll_pos2;
+	float scroll_pos1, scroll_pos2, scroll_pos3;
 	bool show_debug_plane;
 
 	POINT lastmouse;

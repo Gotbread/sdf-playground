@@ -131,6 +131,11 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 				scroll_pos2 += ydiff / 1000.f;
 				scroll_pos2 = std::min(std::max(scroll_pos2, -10.f), +10.f);
 			}
+			if (mouse_state[MouseButton::Right])
+			{
+				scroll_pos3 += xdiff / 1000.f;
+				scroll_pos3 = std::min(std::max(scroll_pos3, 0.f), 1.f);
+			}
 			lastmouse.x = LOWORD(lParam);
 			lastmouse.y = HIWORD(lParam);
 		}
@@ -211,6 +216,7 @@ bool Application::initGraphics()
 	stime = 0.f;
 	scroll_pos1 = 1.f;
 	scroll_pos2 = 0.f;
+	scroll_pos3 = 0.f;
 
 	return true;
 }
@@ -408,7 +414,8 @@ void Application::render()
 		}
 		cam_buf->debug_plane_point = cam_buf->debug_plane_normal * scroll_pos2;
 
-		cam_buf->stime = stime;
+		cam_buf->params.stime = stime;
+		cam_buf->params.free_param = scroll_pos3;
 
 		ctx->Unmap(camera_buffer, 0);
 		ctx->PSSetConstantBuffers(0, 1, &camera_buffer);

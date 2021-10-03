@@ -24,6 +24,7 @@ cbuffer camera
 
 	float _unused;
 	float stime;
+	float free_param;
 };
 
 // to allow use of the stime constant
