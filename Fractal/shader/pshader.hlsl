@@ -1,5 +1,4 @@
 #include "noise.hlsl"
-#include "sdf_scene.hlsl"
 
 
 struct ps_input
@@ -19,13 +18,18 @@ cbuffer camera
 	float3 front_vec;
 	float3 right_vec;
 	float3 top_vec;
+	float _unused;
+	float stime;
 };
 
+// to allow use of the stime constant
+#include "sdf_scene.hlsl"
 
-static const float dist_eps = 0.0001f;
-static const float grad_eps = 0.0001f;
-static const float max_dist = 3e30;
-static const float max_dist_check = 1e30;
+
+static const float dist_eps = 0.0001f;    // how close to the object before terminating
+static const float grad_eps = 0.0001f;    // how far to move when computing the gradient
+static const float shadow_eps = 0.001f;   // how far to step along the light ray when looking for occluders
+static const float max_dist_check = 1e30; // maximum practical number
 static const float3 lighting_dir = normalize(float3(-3.f, -1.f, 2.f));
 
 static const float debug_ruler_scale = 0.1f;
@@ -71,9 +75,9 @@ float3 debug_plane_color(float scene_distance)
 
 float2 map_debug(float3 p, float3 dir, out float3 material_property)
 {
-	float distance_cut_plane = sdPlaneFast(p, dir, normalize(float3(0.f, 0.f, -1.f)));
+	float distance_cut_plane = sdPlaneFast(p, dir, float3(0.f, 0.f, -1.f));
 	float2 distance_scene = map(p, dir, material_property);
-	if (distance_cut_plane < distance_scene.x && false)
+	if (use_debug_plane && distance_cut_plane < distance_scene.x)
 	{
 		material_property = debug_plane_color(distance_scene.x);
 		return float2(distance_cut_plane, 0.f);
@@ -93,7 +97,63 @@ float3 grad(float3 p, float baseline)
 	return normalize(float3(d1, d2, d3));
 }
 
-float4 colorize(float3 pos, float3 dir, float scene_distance, float material_id, float3 material_property)
+// true if it hit something
+// hit_info.x = material_id
+// hit_info.y = iter count
+// hit_info.z = scene distance
+// hit_info.w = total distance
+bool raymarch_scene(inout float3 pos, float3 dir, float max_dist, out float4 hit_info, out float3 material_property)
+{
+	float total_dist = 0.f;
+	for (uint iter = 0; iter < 100; ++iter)
+	{
+		float2 scene_distance = map_debug(pos, dir, material_property);
+		total_dist += scene_distance.x;
+		if (scene_distance.x < dist_eps)
+		{
+			hit_info.x = scene_distance.y;
+			hit_info.y = (float)iter;
+			hit_info.z = scene_distance.x;
+			hit_info.w = total_dist;
+			return true;
+		}
+		else if (total_dist > max_dist)
+		{
+			return false;
+		}
+		pos += dir * scene_distance.x;
+	}
+	return false;
+}
+
+// tests if we can reach a target
+// scene_rel_distance = how close we ever came to other scene objects
+// relative to the distance traveled. if this value is close to one, we were
+// mostly unobstructed
+bool raymarch_scene_obstruction(float3 pos, float3 dir, float max_dist, out float scene_rel_distance)
+{
+	scene_rel_distance = 1.f;
+	float total_dist = 0.f;
+	for (uint iter = 0; iter < 100; ++iter)
+	{
+		float3 material_property;
+		float2 scene_distance = map(pos, dir, material_property);
+		total_dist += scene_distance.x;
+		scene_rel_distance = min(scene_rel_distance, scene_distance.x / total_dist);
+		if (scene_distance.x < dist_eps)
+		{
+			return true;
+		}
+		else if (total_dist > max_dist)
+		{
+			return false;
+		}
+		pos += dir * scene_distance.x;
+	}
+	return true;
+}
+
+float4 colorize(float3 pos, float3 dir, float scene_distance, float iter_count, float material_id, float3 material_property)
 {
 	float3 col; // the output color
 
@@ -102,22 +162,26 @@ float4 colorize(float3 pos, float3 dir, float scene_distance, float material_id,
 	{
 		col = material_property;
 	}
-	else if (material_id == 1.f) // 1 = solid color
+	else if (material_id == 1.f) // 1 = iter count
+	{
+		col = iter_count / 100.f;
+	}
+	else if (material_id == 2.f) // 2 = solid color
 	{
 		col = material_property;
 	}
 	else // all other colors are with shading now
 	{
 		float3 diffuse_color = float3(0.5f, 0.5f, 0.5f);
-		if (material_id == 2.f) // 2 = solid color with shading
+		if (material_id == 3.f) // 3 = solid color with shading
 		{
 			diffuse_color = material_property;
 		}
-		else if (material_id == 3.f) // 3 = marble
+		else if (material_id == 4.f) // 4 = marble
 		{
 			diffuse_color = marble(material_property);
 		}
-		else if (material_id == 4.f) // 4 = wood
+		else if (material_id == 5.f) // 5 = wood
 		{
 			diffuse_color = wood(material_property);
 		}
@@ -128,6 +192,14 @@ float4 colorize(float3 pos, float3 dir, float scene_distance, float material_id,
 		float specular_shading = pow(saturate(dot(specular_ref, -dir)), 12.f);
 		float3 specular_color = float3(1.f, 1.f, 1.f);
 
+		float scene_rel_distance;
+		bool obstructed = raymarch_scene_obstruction(pos - lighting_dir * shadow_eps, -lighting_dir, 100.f, scene_rel_distance);
+		if (obstructed)
+		{
+			diffuse_shading *= 0.3f;
+			specular_shading = 0.f;
+		}
+
 		col = diffuse_color * diffuse_shading + specular_color * specular_shading;
 	}
 	return float4(col, 1.f);
@@ -135,25 +207,18 @@ float4 colorize(float3 pos, float3 dir, float scene_distance, float material_id,
 
 void ps_main(ps_input input, out ps_output output)
 {
+	// calculate main ray
 	float3 dir = normalize(front_vec + input.screenpos.x * right_vec + input.screenpos.y * top_vec);
 
+	// march it
 	float3 pos = eye;
 	float4 col = float4(0.1f, 0.1f, 0.f, 1.f);
-	for (uint iter = 0; iter < 100; ++iter)
+	float4 hit_info;
+	float3 material_property;
+	if (raymarch_scene(pos, dir, max_dist_check, hit_info, material_property))
 	{
-		float3 material_property;
-		float2 scene_distance = map_debug(pos, dir, material_property);
-		if (scene_distance.x < dist_eps)
-		{
-			col = colorize(pos, dir, scene_distance.x, scene_distance.y, material_property);
-			break;
-		}
-		else if (scene_distance.x > max_dist_check)
-		{
-			break;
-		}
-		pos += dir * scene_distance.x;
+		col = colorize(pos, dir, hit_info.z, hit_info.y, hit_info.x, material_property);
 	}
 
 	output.color = col;
-};
+}
