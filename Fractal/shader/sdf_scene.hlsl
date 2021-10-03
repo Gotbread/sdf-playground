@@ -4,6 +4,41 @@
 // use the debug plane?
 static const bool use_debug_plane = true;
 
+// currently not in use
+//float sierpinski(float3 p, uint depth)
+//{
+//	float3 a1 = float3(+1.f, +1.f, +1.f);
+//	float3 a2 = float3(-1.f, -1.f, +1.f);
+//	float3 a3 = float3(+1.f, -1.f, -1.f);
+//	float3 a4 = float3(-1.f, +1.f, -1.f);
+//	float scale = 2.f;
+//	for (uint iter = 0; iter < depth; ++iter)
+//	{
+//		float3 c = a1;
+//		float dist = length(p - a1);
+//		float d = length(p - a2);
+//		if (d < dist)
+//		{
+//			c = a2;
+//			dist = d;
+//		}
+//		d = length(p - a3);
+//		if (d < dist)
+//		{
+//			c = a3;
+//			dist = d;
+//		}
+//		d = length(p - a4);
+//		if (d < dist)
+//		{
+//			c = a4;
+//			dist = d;
+//		}
+//		p = scale * p - c * (scale - 1.f);
+//	}
+//	return length(p) / pow(scale, depth) - 2 * dist_eps;
+//}
+
 float vase(float3 pos)
 {
 	float obj1 = sdSphere(pos - float3(0.f, 2.f, 0.f), 0.5f);
