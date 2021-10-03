@@ -28,25 +28,25 @@ cbuffer camera
 
 static const float dist_eps = 0.0001f;    // how close to the object before terminating
 static const float grad_eps = 0.0001f;    // how far to move when computing the gradient
-static const float shadow_eps = 0.001f;   // how far to step along the light ray when looking for occluders
+static const float shadow_eps = 0.0003f;   // how far to step along the light ray when looking for occluders
 static const float max_dist_check = 1e30; // maximum practical number
-static const float3 lighting_dir = normalize(float3(-3.f, -1.f, 2.f));
+static const float3 lighting_dir = normalize(float3(-1.f, -3.f, 1.5f));
 
 static const float debug_ruler_scale = 0.1f;
 
 
 float turbulence(float3 pos)
 {
-	return (snoise(pos) + snoise(pos * 2.f) / 2.f + snoise(pos * 4.f) / 4.f) * 4.f / 7.f;
+	return (snoise(pos) + snoise(pos * 2.f) / 2.f + snoise(pos * 4.f) / 4.f + snoise(pos * 8.f) / 8.f) * 8.f / 15.f;
 }
 
-float3 marble(float3 pos)
+float3 marble(float3 pos, float3 marble_color)
 {
 	float3 marble_dir = float3(3.f, 2.f, 1.f);
 	float wave_pos = dot(marble_dir, pos) * 2.f + turbulence(pos) * 5.f;
 	float sine_val = (1.f + sin(wave_pos)) * 0.5f;
 	sine_val = pow(sine_val, 0.5f);
-	return float3(0.556f, 0.478f, 0.541f) * sine_val;
+	return marble_color * sine_val;
 }
 
 float3 wood(float3 pos)
@@ -179,21 +179,25 @@ float4 colorize(float3 pos, float3 dir, float scene_distance, float iter_count, 
 		}
 		else if (material_id == 4.f) // 4 = marble
 		{
-			diffuse_color = marble(material_property);
+			diffuse_color = marble(material_property, float3(0.556f, 0.478f, 0.541f));
 		}
-		else if (material_id == 5.f) // 5 = wood
+		else if (material_id == 5.f) // 5 = white marble
+		{
+			diffuse_color = marble(material_property, float3(0.7f, 0.7f, 0.7f));
+		}
+		else if (material_id == 6.f) // 6 = wood
 		{
 			diffuse_color = wood(material_property);
 		}
 
 		float3 normal = grad(pos, scene_distance);
-		float diffuse_shading = clamp(dot(normal, lighting_dir), 0.05f, 1.f);
+		float diffuse_shading = clamp(dot(normal, lighting_dir), 0.1f, 1.f);
 		float3 specular_ref = reflect(lighting_dir, normal);
 		float specular_shading = pow(saturate(dot(specular_ref, -dir)), 12.f);
 		float3 specular_color = float3(1.f, 1.f, 1.f);
 
 		float scene_rel_distance;
-		bool obstructed = raymarch_scene_obstruction(pos - lighting_dir * shadow_eps, -lighting_dir, 100.f, scene_rel_distance);
+		bool obstructed = raymarch_scene_obstruction(pos - normal * shadow_eps, -lighting_dir, 100.f, scene_rel_distance);
 		if (obstructed)
 		{
 			diffuse_shading *= 0.3f;

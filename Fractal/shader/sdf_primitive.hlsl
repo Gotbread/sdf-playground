@@ -42,6 +42,12 @@ float sdTorusXY(float3 pos, float radius_big, float radius_small)
 	return length(q) - radius_small;
 }
 
+float sdCappedCylinder(float3 pos, float h, float r)
+{
+	float2 d = abs(float2(length(pos.xz), pos.y)) - float2(r, h);
+	return min(max(d.x, d.y), 0.f) + length(max(d, 0.f));
+}
+
 // replicates a box of space along all axes
 // count: the extra count how many boxes will be added
 // size: the size of the box that gets repeated
@@ -50,6 +56,18 @@ float3 opRepLim(float3 pos, float3 count, float3 size)
 	float3 rounded = size * (round(pos / size + count / 2) - count / 2);
 	float3 limit = count * size * 0.5f;
 	return pos - clamp(rounded, -limit, limit);
+}
+
+float3 opRepInf(float3 pos, float3 size)
+{
+	float3 x = pos + size * 0.5f;
+	return x - size * floor(x / size) - size * 0.5f;
+}
+
+float2 opRepInf(float2 pos, float2 size)
+{
+	float2 x = pos + size * 0.5f;
+	return x - size * floor(x / size) - size * 0.5f;
 }
 
 float2 opRotate(float2 pos, float angle)

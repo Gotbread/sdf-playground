@@ -4,6 +4,14 @@
 // use the debug plane?
 static const bool use_debug_plane = false;
 
+float vase(float3 pos)
+{
+	float obj1 = sdSphere(pos - float3(0.f, 2.f, 0.f), 0.5f);
+	float obj2 = sdCappedCylinder(pos - float3(0.f, 0.75f, 0.f), 0.75f, 0.2f);
+	float obj3 = sdBox(pos - float3(0.f, 0.1f, 0.f), float3(0.4f, 0.1f, 0.4f));
+	return min(min(obj1, obj2), obj3);
+}
+
 // return value:
 // x: scene distance
 // y: material ID
@@ -12,15 +20,66 @@ static const bool use_debug_plane = false;
 // extra vector, meaning depends on material
 float2 map(float3 pos, float3 dir, out float3 material_property)
 {
-	float3 new_pos = opRepLim(pos, float3(10.f, 10.f, 10.f), float3(1.5f, 1.5f, 1.5f));
-	float3 instance_id_vec = pos - new_pos;
-	float instance_id = dot(instance_id_vec, float3(5.f, 2.f, 1.f));
-	material_property = float3(0.1f, 0.7f, 0.2f);
-	float angle = staircase(stime + instance_id, 2 * 3.1415926f, 20.f);
+	/*
+	// wall
+	float3 wall_pos = pos;
+	wall_pos.xz = opRepInf(wall_pos.xz, float2(20.f, 20.f));
+	wall_pos.xz = abs(wall_pos.xz);
+	if (wall_pos.z > wall_pos.x)
+	{
+		wall_pos.xz = wall_pos.zx;
+	}
 
-	float box = sdBox(new_pos, float3(0.8f, 0.8f, 0.8f));
-	new_pos.xz = opRotate(new_pos.xz, angle);
-	float d = sdTorusXY(new_pos, 0.35f, 0.1f);
-	d = min(d, -box);
-	return float2(d, 3.f);
+	float wall1 = sdBox(wall_pos - float3(3.5f, 2.f, 3.f), float3(1.5f, 2.f, 1.f));
+	float wall2 = sdBox(wall_pos - float3(7.f, 2.f, 5.f), float3(3.f, 2.f, 1.f));
+	float wall = min(wall1, wall2);
+
+	// object
+	float3 obj_pos = wall_pos;
+	obj_pos.x -= 8.f;
+	obj_pos.x = abs(obj_pos.x);
+	float obj1 = vase(obj_pos - float3(1.f, 0.f, 3.f));
+
+	// floor
+	float floor1 = sdPlane(pos, float3(0.f, 1.f, 0.f));
+
+	// select
+	if (obj1 < wall && obj1 < floor1)
+	{
+		material_property = pos;
+		return float2(obj1, 6.f);
+	}
+	else if (wall < floor1)
+	{
+		material_property = pos;
+		return float2(wall, 5.f);
+	}
+	else
+	{
+		float2 tile_pos = floor(pos.xz);
+		float tile_parity = round(frac((tile_pos.x + tile_pos.y) * 0.5f + 0.25f));
+		material_property = tile_parity > 0.5f ? float3(0.1f, 0.1f, 0.1f) : float3(0.8f, 0.8f, 0.8f);
+		return float2(floor1, 3.f);
+	}*/
+
+
+	// testing
+	float obj1 = vase(pos);
+
+	// floor
+	float floor1 = sdPlane(pos, float3(0.f, 1.f, 0.f));
+
+	// select
+	if (obj1 < floor1)
+	{
+		material_property = float3(1.f, 0.75f, 0.1f);
+		return float2(obj1, 3.f);
+	}
+	else
+	{
+		float2 tile_pos = floor(pos.xz);
+		float tile_parity = round(frac((tile_pos.x + tile_pos.y) * 0.5f + 0.25f));
+		material_property = tile_parity > 0.5f ? float3(0.1f, 0.1f, 0.1f) : float3(0.8f, 0.8f, 0.8f);
+		return float2(floor1, 3.f);
+	}
 }
