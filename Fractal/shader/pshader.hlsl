@@ -95,12 +95,12 @@ float2 map_debug(float3 p, float3 dir, out float3 material_property)
 	}
 }
 
-float3 grad(float3 p, float baseline)
+float3 grad(float3 p, float baseline, float transparency)
 {
 	float3 unused;
-	float d1 = map(float4(p - float3(grad_eps, 0.f, 0.f), 0.f), float3(0.f, 0.f, 0.f), unused).x - baseline;
-	float d2 = map(float4(p - float3(0.f, grad_eps, 0.f), 0.f), float3(0.f, 0.f, 0.f), unused).x - baseline;
-	float d3 = map(float4(p - float3(0.f, 0.f, grad_eps), 0.f), float3(0.f, 0.f, 0.f), unused).x - baseline;
+	float d1 = map(float4(p - float3(grad_eps, 0.f, 0.f), transparency), float3(0.f, 0.f, 0.f), unused).x - baseline;
+	float d2 = map(float4(p - float3(0.f, grad_eps, 0.f), transparency), float3(0.f, 0.f, 0.f), unused).x - baseline;
+	float d3 = map(float4(p - float3(0.f, 0.f, grad_eps), transparency), float3(0.f, 0.f, 0.f), unused).x - baseline;
 	return normalize(float3(d1, d2, d3));
 }
 
@@ -197,9 +197,11 @@ float4 colorize(float3 pos, float3 dir, float scene_distance, float iter_count, 
 	if (material_id == 100.f) // 100 = fire. if we hit fire, continue with the marching process until we hit something else
 	{
 		// add the fire color
-		float fadeout = saturate(dot(-dir.xz, normalize(pos.xz)));
-		extra_color = fire(material_property, 1.f - fadeout);
+		float3 normal = grad(pos, scene_distance, 1.f);
 
+		float fadeout = saturate(dot(dir, normal));
+		extra_color = fire(material_property, 1.f - fadeout);
+		
 		// continue
 		float4 hit_info;
 		if (raymarch_scene_opaque(pos, dir, max_dist_check, hit_info, material_property))
@@ -243,7 +245,7 @@ float4 colorize(float3 pos, float3 dir, float scene_distance, float iter_count, 
 			diffuse_color = wood(material_property);
 		}
 
-		float3 normal = grad(pos, scene_distance);
+		float3 normal = grad(pos, scene_distance, 0.f);
 		float diffuse_shading = clamp(dot(normal, lighting_dir), 0.1f, 1.f);
 		float3 specular_ref = reflect(lighting_dir, normal);
 		float specular_shading = pow(saturate(dot(specular_ref, -dir)), 12.f);

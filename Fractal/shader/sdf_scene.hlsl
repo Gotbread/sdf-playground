@@ -67,7 +67,7 @@ float vase(float3 pos)
 float2 map(float4 pos, float3 dir, out float3 material_property)
 {
 	// wall
-	/*float3 wall_pos = pos;
+	float3 wall_pos = pos.xyz;
 	wall_pos.xz = opRepInf(wall_pos.xz, float2(20.f, 20.f));
 	wall_pos.xz = abs(wall_pos.xz);
 	if (wall_pos.z > wall_pos.x)
@@ -79,24 +79,45 @@ float2 map(float4 pos, float3 dir, out float3 material_property)
 	float wall2 = sdBox(wall_pos - float3(7.f, 2.f, 5.f), float3(3.f, 2.f, 1.f));
 	float wall = min(wall1, wall2);
 
-	// object
+	// object - vase
 	float3 obj_pos = wall_pos;
 	obj_pos.x -= 8.f;
 	obj_pos.x = abs(obj_pos.x);
 	float obj1 = vase(obj_pos - float3(1.f, 0.f, 3.f));
 
+	// object - torch
+	static const float torch_angle = 15.f * pi / 180.f;
+	static const float torch_c = cos(torch_angle), torch_s = sin(torch_angle);
+
+	float3 torch_pos = wall_pos.xyz - float3(5.f, 2.f, 3.f);
+	float3 wood_pos = torch_pos;
+	torch_pos.x -= 0.3f; // offset the torch slightly
+	wood_pos.xy = float2(wood_pos.x * torch_c - wood_pos.y * torch_s, wood_pos.x * torch_s + wood_pos.y * torch_c);
+	float wood = sdBox(wood_pos - float3(0.f, 0.6f, 0.f), float3(0.05f, 0.5f, 0.05f));
+	float fire = sdRoundCone(torch_pos, float3(0.f, 1.1f, 0.f), float3(0.f, 1.6f, 0.f), 0.15f, 0.1f);
+
 	// floor
-	float floor1 = sdPlane(pos, float3(0.f, 1.f, 0.f));
+	float floor1 = sdPlaneFast(pos.xyz, dir, float3(0.f, 1.f, 0.f));
 
 	// select
-	if (obj1 < wall && obj1 < floor1)
+	if (pos.w > 0.5f && fire < wood && fire < floor1 && fire < obj1 && fire < wall) // fire
 	{
-		material_property = pos * 3.f;
+		material_property = torch_pos.xyz * 3.f - float3(0.f, stime * 3.f, 0.f);
+		return float2(fire, 100.f);
+	}
+	else if (wood < floor1 && wood < obj1 && wood < wall) // wood
+	{
+		material_property = pos.xzy * 2.f;
+		return float2(wood, 6.f);
+	}
+	else if (obj1 < wall && obj1 < floor1) // obj
+	{
+		material_property = pos.xyz * 3.f;
 		return float2(obj1, 4.f);
 	}
-	else if (wall < floor1)
+	else if (wall < floor1) // wall
 	{
-		material_property = pos;
+		material_property = pos.xyz;
 		return float2(wall, 5.f);
 	}
 	else
@@ -105,11 +126,16 @@ float2 map(float4 pos, float3 dir, out float3 material_property)
 		float tile_parity = round(frac((tile_pos.x + tile_pos.y) * 0.5f + 0.25f));
 		material_property = tile_parity > 0.5f ? float3(0.1f, 0.1f, 0.1f) : float3(0.8f, 0.8f, 0.8f);
 		return float2(floor1, 3.f);
-	}*/
+	}
 
 
 	// testing
-	float wood = sdBox(pos.xyz - float3(0.f, 0.6f, 0.f), float3(0.05f, 0.5f, 0.05f));
+	/*static const float torch_angle = 15.f * pi / 180.f;
+	static const float torch_c = cos(torch_angle), torch_s = sin(torch_angle);
+
+	float3 torch_pos = pos.xyz;
+	torch_pos.xy = float2(torch_pos.x * torch_c - torch_pos.y * torch_s, torch_pos.x * torch_s + torch_pos.y * torch_c);
+	float wood = sdBox(torch_pos.xyz - float3(0.f, 0.6f, 0.f), float3(0.05f, 0.5f, 0.05f));
 	float fire = sdRoundCone(pos.xyz, float3(0.f, 1.1f, 0.f), float3(0.f, 1.6f, 0.f), 0.15f, 0.1f);
 
 	// floor
@@ -132,5 +158,5 @@ float2 map(float4 pos, float3 dir, out float3 material_property)
 		float tile_parity = round(frac((tile_pos.x + tile_pos.y) * 0.5f + 0.25f));
 		material_property = tile_parity > 0.5f ? float3(0.1f, 0.1f, 0.1f) : float3(0.8f, 0.8f, 0.8f);
 		return float2(floor1, 3.f);
-	}
+	}*/
 }
