@@ -5,6 +5,10 @@
 //
 // in all functions, "pos" refers to the space position for which to evaluate the SDF
 
+static const float sqrt_half = 0.7071067811865f;
+static const float sqrt_two = 1.414213562373096f;
+static const float pi = 3.14159265358979323f;
+
 float sdSphere(float3 pos, float radius)
 {
 	return length(pos) - radius;
@@ -77,9 +81,39 @@ float2 opRotate(float2 pos, float angle)
 	return float2(pos.x * c - pos.y * s, pos.x * s + pos.y * c);
 }
 
+// transforms a 2D vector to a 45° tilted coordinate system
+// same transform also works backwards
+float2 opAB2UV(float2 input)
+{
+	return float2(input.x + input.y, input.x - input.y) * sqrt_half;
+}
+
+float opChamfer(float a, float b, float size)
+{
+	return (a + b - size) * sqrt_half;
+}
+
 float opChamferMerge(float a, float b, float size)
 {
-	return min(min(a, b), (a + b - size) * 0.707f);
+	return min(min(a, b), opChamfer(a, b, size));
+}
+
+float opPipe(float a, float b, float size, float count)
+{
+	float2 ab = float2(a, b);
+	float2 uv = opAB2UV(ab);
+	float diag = size * sqrt_half - uv.y;
+	diag = fmod(diag, sqrt_two * size / count);
+	uv.y = size * sqrt_half - diag;
+	ab = opAB2UV(uv);
+
+	float a_offset = (count - 1.f) / count;
+	return length(float2(ab.x - a_offset * size, ab.y)) - size / count;
+}
+
+float opPipeMerge(float a, float b, float size, float count)
+{
+	return min(min(a, b), opPipe(a, b, size, count));
 }
 
 // stepval = how far each step goes
