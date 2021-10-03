@@ -77,6 +77,11 @@ float2 opRotate(float2 pos, float angle)
 	return float2(pos.x * c - pos.y * s, pos.x * s + pos.y * c);
 }
 
+float opChamferMerge(float a, float b, float size)
+{
+	return min(min(a, b), (a + b - size) * 0.707f);
+}
+
 // stepval = how far each step goes
 // spread = how far apart the steps are
 float staircase(float x, float stepval, float spread)
