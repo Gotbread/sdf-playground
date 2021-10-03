@@ -40,11 +40,6 @@ static const float3 lighting_dir = normalize(float3(-1.f, -1.f, 1.5f));
 static const float debug_ruler_scale = 0.01f;
 
 
-float turbulence(float3 pos)
-{
-	return (snoise(pos) + snoise(pos * 2.f) / 2.f + snoise(pos * 4.f) / 4.f + snoise(pos * 8.f) / 8.f) * 8.f / 15.f;
-}
-
 float3 marble(float3 pos, float3 marble_color)
 {
 	float3 marble_dir = float3(3.f, 2.f, 1.f);
@@ -65,6 +60,13 @@ float3 wood(float3 pos)
 	return float3(0.3125f + sine_val, 0.117f + sine_val, 0.117f);
 }
 
+float3 fire(float3 pos, float threshold)
+{
+	float turb = turbulence(pos) + 0.35f;
+	turb = turb > threshold ? turb : 0.f;
+	return float3(5.f, 2.f, 1.f) * turb;
+}
+
 float3 debug_plane_color(float scene_distance)
 {
 	float int_steps;
@@ -81,7 +83,7 @@ float3 debug_plane_color(float scene_distance)
 float2 map_debug(float3 p, float3 dir, out float3 material_property)
 {
 	float distance_cut_plane = sdPlaneFast(p - debug_plane_point, dir, debug_plane_normal);
-	float2 distance_scene = map(p, dir, material_property);
+	float2 distance_scene = map(float4(p, 1.f), dir, material_property);
 	if (dot(debug_plane_normal, debug_plane_normal) > 0.5f && distance_cut_plane < distance_scene.x)
 	{
 		material_property = debug_plane_color(distance_scene.x);
@@ -96,9 +98,9 @@ float2 map_debug(float3 p, float3 dir, out float3 material_property)
 float3 grad(float3 p, float baseline)
 {
 	float3 unused;
-	float d1 = map(p - float3(grad_eps, 0.f, 0.f), float3(0.f, 0.f, 0.f), unused).x - baseline;
-	float d2 = map(p - float3(0.f, grad_eps, 0.f), float3(0.f, 0.f, 0.f), unused).x - baseline;
-	float d3 = map(p - float3(0.f, 0.f, grad_eps), float3(0.f, 0.f, 0.f), unused).x - baseline;
+	float d1 = map(float4(p - float3(grad_eps, 0.f, 0.f), 0.f), float3(0.f, 0.f, 0.f), unused).x - baseline;
+	float d2 = map(float4(p - float3(0.f, grad_eps, 0.f), 0.f), float3(0.f, 0.f, 0.f), unused).x - baseline;
+	float d3 = map(float4(p - float3(0.f, 0.f, grad_eps), 0.f), float3(0.f, 0.f, 0.f), unused).x - baseline;
 	return normalize(float3(d1, d2, d3));
 }
 
@@ -107,12 +109,41 @@ float3 grad(float3 p, float baseline)
 // hit_info.y = iter count
 // hit_info.z = scene distance
 // hit_info.w = total distance
-bool raymarch_scene(inout float3 pos, float3 dir, float max_dist, out float4 hit_info, out float3 material_property)
+bool raymarch_scene_transparent(inout float3 pos, float3 dir, float max_dist, out float4 hit_info, out float3 material_property)
 {
 	float total_dist = 0.f;
 	for (uint iter = 0; iter < 100; ++iter)
 	{
 		float2 scene_distance = map_debug(pos, dir, material_property);
+		total_dist += scene_distance.x;
+		if (scene_distance.x < dist_eps)
+		{
+			hit_info.x = scene_distance.y;
+			hit_info.y = (float)iter;
+			hit_info.z = scene_distance.x;
+			hit_info.w = total_dist;
+			return true;
+		}
+		else if (total_dist > max_dist)
+		{
+			return false;
+		}
+		pos += dir * scene_distance.x;
+	}
+	return false;
+}
+
+// true if it hit something
+// hit_info.x = material_id
+// hit_info.y = iter count
+// hit_info.z = scene distance
+// hit_info.w = total distance
+bool raymarch_scene_opaque(inout float3 pos, float3 dir, float max_dist, out float4 hit_info, out float3 material_property)
+{
+	float total_dist = 0.f;
+	for (uint iter = 0; iter < 100; ++iter)
+	{
+		float2 scene_distance = map(float4(pos, 0.f), dir, material_property);
 		total_dist += scene_distance.x;
 		if (scene_distance.x < dist_eps)
 		{
@@ -142,7 +173,7 @@ bool raymarch_scene_obstruction(float3 pos, float3 dir, float max_dist, out floa
 	for (uint iter = 0; iter < 100; ++iter)
 	{
 		float3 material_property;
-		float2 scene_distance = map(pos, dir, material_property);
+		float2 scene_distance = map(float4(pos, 0.f), dir, material_property);
 		total_dist += scene_distance.x;
 		scene_rel_distance = min(scene_rel_distance, scene_distance.x / total_dist);
 		if (scene_distance.x < dist_eps)
@@ -160,7 +191,24 @@ bool raymarch_scene_obstruction(float3 pos, float3 dir, float max_dist, out floa
 
 float4 colorize(float3 pos, float3 dir, float scene_distance, float iter_count, float material_id, float3 material_property)
 {
-	float3 col; // the output color
+	float3 col = float3(0.1f, 0.1f, 0.f); // the output color
+	float3 extra_color = float3(0.f, 0.f, 0.f);
+
+	if (material_id == 100.f) // 100 = fire. if we hit fire, continue with the marching process until we hit something else
+	{
+		// add the fire color
+		float fadeout = saturate(dot(-dir.xz, normalize(pos.xz)));
+		extra_color = fire(material_property, 1.f - fadeout);
+
+		// continue
+		float4 hit_info;
+		if (raymarch_scene_opaque(pos, dir, max_dist_check, hit_info, material_property))
+		{
+			scene_distance = hit_info.z;
+			iter_count += hit_info.y;
+			material_id = hit_info.x;
+		}
+	}
 
 	// now select the material id
 	if (material_id == 0.f) // 0 = debug plane
@@ -211,7 +259,7 @@ float4 colorize(float3 pos, float3 dir, float scene_distance, float iter_count, 
 
 		col = diffuse_color * diffuse_shading + specular_color * specular_shading;
 	}
-	return float4(col, 1.f);
+	return float4(col + extra_color, 1.f);
 }
 
 void ps_main(ps_input input, out ps_output output)
@@ -224,7 +272,7 @@ void ps_main(ps_input input, out ps_output output)
 	float4 col = float4(0.1f, 0.1f, 0.f, 1.f);
 	float4 hit_info;
 	float3 material_property;
-	if (raymarch_scene(pos, dir, max_dist_check, hit_info, material_property))
+	if (raymarch_scene_transparent(pos, dir, max_dist_check, hit_info, material_property))
 	{
 		col = colorize(pos, dir, hit_info.z, hit_info.y, hit_info.x, material_property);
 	}

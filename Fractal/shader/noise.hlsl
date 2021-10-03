@@ -134,3 +134,8 @@ float snoise(float3 v)
 			)
 	);
 }
+
+float turbulence(float3 pos)
+{
+	return (snoise(pos) + snoise(pos * 2.f) / 2.f + snoise(pos * 4.f) / 4.f + snoise(pos * 8.f) / 8.f) * 8.f / 15.f;
+}

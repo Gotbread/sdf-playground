@@ -52,16 +52,22 @@ float vase(float3 pos)
 	return d;
 }
 
+// params:
+// pos.xyz: 3D position in the scene
+// pos.w: one when rendering with transparent objects, zero without
+// 
+// dir: input normal. normalized to 1 for normal passes, zero for gradient-only passes
+// 
 // return value:
 // x: scene distance
 // y: material ID
 //
 // material_property:
 // extra vector, meaning depends on material
-float2 map(float3 pos, float3 dir, out float3 material_property)
+float2 map(float4 pos, float3 dir, out float3 material_property)
 {
 	// wall
-	float3 wall_pos = pos;
+	/*float3 wall_pos = pos;
 	wall_pos.xz = opRepInf(wall_pos.xz, float2(20.f, 20.f));
 	wall_pos.xz = abs(wall_pos.xz);
 	if (wall_pos.z > wall_pos.x)
@@ -99,20 +105,26 @@ float2 map(float3 pos, float3 dir, out float3 material_property)
 		float tile_parity = round(frac((tile_pos.x + tile_pos.y) * 0.5f + 0.25f));
 		material_property = tile_parity > 0.5f ? float3(0.1f, 0.1f, 0.1f) : float3(0.8f, 0.8f, 0.8f);
 		return float2(floor1, 3.f);
-	}
+	}*/
 
 
 	// testing
-	/*float obj1 = vase(pos);
+	float wood = sdBox(pos.xyz - float3(0.f, 0.6f, 0.f), float3(0.05f, 0.5f, 0.05f));
+	float fire = sdRoundCone(pos.xyz, float3(0.f, 1.1f, 0.f), float3(0.f, 1.6f, 0.f), 0.15f, 0.1f);
 
 	// floor
-	float floor1 = sdPlane(pos, float3(0.f, 1.f, 0.f));
+	float floor1 = sdPlaneFast(pos.xyz, dir, float3(0.f, 1.f, 0.f));
 
 	// select
-	if (obj1 < floor1)
+	if (pos.w > 0.5f && fire < wood && fire < floor1)
 	{
-		material_property = pos * 3.f;
-		return float2(obj1, 4.f);
+		material_property = pos.xyz * 3.f - float3(0.f, stime * 3.f, 0.f);
+		return float2(fire, 100.f);
+	}
+	else if (wood < floor1)
+	{
+		material_property = pos.xzy * 2.f;
+		return float2(wood, 6.f);
 	}
 	else
 	{
@@ -120,5 +132,5 @@ float2 map(float3 pos, float3 dir, out float3 material_property)
 		float tile_parity = round(frac((tile_pos.x + tile_pos.y) * 0.5f + 0.25f));
 		material_property = tile_parity > 0.5f ? float3(0.1f, 0.1f, 0.1f) : float3(0.8f, 0.8f, 0.8f);
 		return float2(floor1, 3.f);
-	}*/
+	}
 }
