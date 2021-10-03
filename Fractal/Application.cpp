@@ -173,8 +173,8 @@ bool Application::initGraphics()
 	camera.SetMaxXAngle(ToRadian(80.f));
 	camera.SetRoll(0.f);
 
-	camera.SetEye(Vector3(2.5f, 1.5f, -4.5f));
-	camera.SetLookat(Vector3(0.f, -1.5f, 0.f));
+	camera.SetEye(Vector3(0.f, 0.f, -4.5f));
+	camera.SetLookat(Vector3(0.f, 0.f, 0.f));
 
 	stime = 0.f;
 
@@ -344,6 +344,7 @@ void Application::render()
 	cam_buf->front_vec = camera.GetDirection();
 	cam_buf->right_vec = (camera.GetFrustrumEdge(0) - camera.GetFrustrumEdge(3)) * 0.5f;
 	cam_buf->top_vec = (camera.GetFrustrumEdge(0) - camera.GetFrustrumEdge(1)) * 0.5f;
+	cam_buf->stime = stime;
 
 	ctx->Unmap(camera_buffer, 0);
 	ctx->PSSetConstantBuffers(0, 1, &camera_buffer);
@@ -400,6 +401,10 @@ void Application::updateSimulation(float dt)
 	if (keystate['E'])
 	{
 		move += Vector3(0.f, -1.f, 0.f);
+	}
+	if (keystate[VK_SHIFT])
+	{
+		move *= 3.0f;
 	}
 
 	camera.MoveRel(move * dt);

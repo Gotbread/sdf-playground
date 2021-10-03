@@ -24,6 +24,7 @@ private:
 	{
 		alignas(16) Math3D::Vector3 eye;
 		alignas(16) Math3D::Vector3 front_vec, right_vec, top_vec;
+		alignas(16) float stime;
 	};
 
 	LRESULT CALLBACK WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
