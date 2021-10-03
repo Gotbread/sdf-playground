@@ -2,6 +2,7 @@
 
 #include <Windows.h>
 #include <memory>
+#include <string>
 
 #include "Graphics.h"
 #include "Camera.h"
@@ -23,6 +24,7 @@ private:
 	{
 		alignas(16) Math3D::Vector3 eye;
 		alignas(16) Math3D::Vector3 front_vec, right_vec, top_vec;
+		alignas(16) float stime;
 	};
 
 	LRESULT CALLBACK WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
@@ -33,6 +35,8 @@ private:
 	bool initGeometry();
 	void render();
 	void updateSimulation(float dt);
+
+	Comptr<ID3DBlob> compileShader(const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings = true, bool disassemble = false);
 
 	HINSTANCE hInstance;
 	HWND hWnd;

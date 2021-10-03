@@ -20,7 +20,7 @@ public:
 		}
 	}
 
-	Comptr(Comptr &&other)
+	Comptr(Comptr &&other) noexcept
 	{
 		t = other.t;
 		other.t = nullptr;
@@ -45,6 +45,17 @@ public:
 		{
 			t->AddRef();
 		}
+	}
+
+	Comptr operator = (Comptr &&other)
+	{
+		if (t)
+		{
+			t->Release();
+		}
+		t = other.t;
+		other.t = nullptr;
+		return *this;
 	}
 
 	T **operator & ()

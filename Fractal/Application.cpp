@@ -1,9 +1,12 @@
 #include <string>
 #include <vector>
+#include <fstream>
+#include <sstream>
 #include <d3dcompiler.h>
 
 #include "Application.h"
 #include "Math3D.h"
+#include "Util.h"
 
 #pragma comment(lib, "d3dcompiler.lib")
 
@@ -21,13 +24,13 @@ bool Application::Init(HINSTANCE hInstance)
 
 	RegisterClass(&wc);
 
-	bool fullscreen = false;
+	bool fullscreen = true;
 	std::string title = "SDF Fractal";
 
 	if (fullscreen)
 	{
-		unsigned width = 800;
-		unsigned height = 600;
+		unsigned width = GetSystemMetrics(SM_CXSCREEN);
+		unsigned height = GetSystemMetrics(SM_CYSCREEN);
 		hWnd = CreateWindow(wc.lpszClassName, title.c_str(), WS_POPUP, 0, 0, width, height, 0, 0, hInstance, this);
 	}
 	else
@@ -121,7 +124,18 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 		}
 		break;
 	case WM_KEYDOWN:
+		// for movement
 		keystate[static_cast<char>(LOWORD(wParam))] = true;
+		// for events
+		switch (LOWORD(wParam))
+		{
+		case VK_ESCAPE: // quit
+			PostQuitMessage(0);
+			break;
+		case 'R': // reload shader
+			initShaders();
+			break;
+		}
 		break;
 	case WM_KEYUP:
 		keystate[static_cast<char>(LOWORD(wParam))] = false;
@@ -165,9 +179,9 @@ bool Application::initGraphics()
 	camera.SetMinXAngle(ToRadian(80.f));
 	camera.SetMaxXAngle(ToRadian(80.f));
 	camera.SetRoll(0.f);
-	
-	camera.SetEye(Vector3(1.2f, 1.2f, -3.f));
-	camera.SetLookat(Vector3(0.f, 0.f, 0.f));
+
+	camera.SetEye(Vector3(0.f, 2.f, -3.f));
+	camera.SetLookat(Vector3(0.f, 1.f, 0.f));
 
 	stime = 0.f;
 
@@ -175,158 +189,65 @@ bool Application::initGraphics()
 }
 
 
+Comptr<ID3DBlob> Application::compileShader(const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings, bool disassemble)
+{
+	// first load the file
+	std::ifstream file(filename);
+	if (!file)
+	{
+		ErrorBox(Format() << "Could not load file \"" << filename << "\"");
+	}
+	std::string code = readFromFile(file);
+
+	// then try to compile it
+	UINT flags =
+#ifdef _DEBUG
+		D3DCOMPILE_DEBUG |
+#endif
+		0;
+
+	Comptr<ID3DBlob> compiled, error;
+	D3DCompile(code.c_str(), code.length(), filename.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, entry.c_str(), profile.c_str(), flags, 0, &compiled, &error);
+	if (error)
+	{
+		if (!compiled) // no code, thus an error
+		{
+			ErrorBox(static_cast<const char *>(error->GetBufferPointer()));
+		}
+		else if (display_warnings) // its a warning, since we got the code
+		{
+			WarningBox(static_cast<const char *>(error->GetBufferPointer()));
+		}
+	}
+
+	if (disassemble && compiled)
+	{
+		UINT disasm_flags = 0;
+		Comptr<ID3DBlob> disassembled;
+		D3DDisassemble(compiled->GetBufferPointer(), compiled->GetBufferSize(), disasm_flags, nullptr, &disassembled);
+		if (disassembled)
+		{
+			std::string output_filename = changeFileExtension(filename, "asm");
+			std::ofstream out_file(output_filename, std::ios::out);
+			out_file.write(static_cast<const char *>(disassembled->GetBufferPointer()), disassembled->GetBufferSize() - 1);
+		}
+	}
+
+	return compiled;
+}
+
+
 bool Application::initShaders()
 {
-	auto v_code = R"r1y(
-		struct vs_input
-		{
-			float2 pos : POSITION;
-		};
+	auto context = graphics->GetContext();
 
-		struct vs_output
-		{
-			float4 pos : SV_POSITION;
-			float2 screenpos : SCREENPOS;
-		};
-
-		void vs_main(vs_input input, out vs_output output)
-		{
-			output.pos = float4(input.pos, 0.f, 1.f);
-			output.screenpos = input.pos;
-		}
-	)r1y";
-
-	auto p_code = R"r1y(
-		struct ps_input
-		{
-			float4 pos : SV_POSITION;
-			float2 screenpos : SCREENPOS;
-		};
-
-		struct ps_output
-		{
-			float4 color : SV_TARGET;
-		};
-
-		cbuffer camera
-		{
-			float3 eye;
-			float3 front_vec;
-			float3 right_vec;
-			float3 top_vec;
-		};
-
-		static const float dist_eps = 0.001f;
-		static const float grad_eps = 0.001f;
-		static const float3 lighting_dir = normalize(float3(-3.f, -1.f, 2.f));
-
-		float sdSphere(float3 p, float r)
-		{
-			return length(p) - r;
-		}
-
-		float sdBox(float3 p, float3 size)
-		{
-			float3 q = abs(p) - size;
-			return length(max(q, 0.f)) + min(max(q.x, max(q.y, q.z)), 0.f);
-		}
-
-		float fractal1(float3 p, uint depth)
-		{
-			float d = 1e20;
-			float3 abspos = abs(p);
-			float scale = 1.f;
-			for (uint iter = 0; iter < depth; ++iter)
-			{
-				float new_d = sdBox(abspos, float3(1.f, 1.f, 1.f)) / scale;
-				d = min(d, new_d);
-
-				if (abspos.z > abspos.y)
-				{
-					abspos.yz = abspos.zy;
-				}
-				if (abspos.y > abspos.x)
-				{
-					abspos.xy = abspos.yx;
-				}
-
-				abspos.x -= 4.f / 3.f;
-				abspos *= 3.f;
-				scale *= 3.f;
-			}
-			return d;
-		}
-
-		float fractal2(float3 p, uint depth)
-		{
-			float d = 1e20;
-			float3 abspos = abs(p);
-			float scale = 1.f;
-			for (uint iter = 0; iter < depth; ++iter)
-			{
-				float new_d = sdBox(abspos, float3(1.f, 1.f, 1.f)) / scale;
-				d = min(d, new_d);
-
-				if (abspos.z > abspos.y)
-				{
-					abspos.yz = abspos.zy;
-				}
-				if (abspos.y > abspos.x)
-				{
-					abspos.xy = abspos.yx;
-				}
-
-				if (abspos.y > 1.f / 3.f)
-				{
-					abspos.y -= 2.f / 3.f;
-				}
-				if (abspos.z > 1.f / 3.f)
-				{
-					abspos.z -= 2.f / 3.f;
-				}
-
-				abspos.x -= 10.f / 9.f;
-				abspos *= 9.f;
-				scale *= 9.f;
-			}
-			return d;
-		}
-
-		float map(float3 p)
-		{
-			return fractal2(p, 3);
-		}
-
-		float3 grad(float3 p, float baseline)
-		{
-			float d1 = map(p - float3(grad_eps, 0.f, 0.f)) - baseline;
-			float d2 = map(p - float3(0.f, grad_eps, 0.f)) - baseline;
-			float d3 = map(p - float3(0.f, 0.f, grad_eps)) - baseline;
-			return normalize(float3(d1, d2, d3));
-		}
-
-		void ps_main(ps_input input, out ps_output output)
-		{
-			float3 dir = normalize(front_vec + input.screenpos.x * right_vec + input.screenpos.y * top_vec);
-
-			float3 pos = eye;
-			float3 col = float3(0.1f, 0.1f, 0.f);
-			for (uint iter = 0; iter < 100; ++iter)
-			{
-				float d = map(pos);
-				if (d < dist_eps)
-				{
-					float3 normal = grad(pos, d);
-					float shading = clamp(dot(normal, lighting_dir), 0.f, 1.f);
-					col = float3(1.f, 1.f, 0.f) * shading;
-					break;
-				}
-				pos += dir * d;
-			}
-
-			output.color = float4(col, 1.f);
-		};
-	)r1y";
+	// remove old objects. since d3d keeps a reference internally
+	// the object is not freed yet. setting it to zero ensures
+	// we dont overwrite it later and loose the pointer.
+	// once we set the new objects in the pipeline, the old ones will get released anyway
+	v_shader = nullptr;
+	p_shader = nullptr;
+	input_layout = nullptr;
 
 	UINT flags =
 #ifdef _DEBUG
@@ -334,31 +255,13 @@ bool Application::initShaders()
 #endif
 		0;
 
-	Comptr<ID3DBlob> v_compiled, v_error;
-	D3DCompile(v_code, strlen(v_code), "vshader", nullptr, nullptr, "vs_main", "vs_5_0", flags, 0, &v_compiled, &v_error);
-	if (v_error)
-	{
-		auto title = v_compiled ? "Warning" : "Error";
-		auto style = v_compiled ? MB_ICONWARNING : MB_ICONERROR;
-		MessageBox(0, static_cast<const char *>(v_error->GetBufferPointer()), title, style);
-	}
+	Comptr<ID3DBlob> v_compiled = compileShader("shader/vshader.hlsl", "vs_5_0", "vs_main");
 	if (!v_compiled)
-	{
 		return false;
-	}
 
-	Comptr<ID3DBlob> p_compiled, p_error;
-	D3DCompile(p_code, strlen(p_code), "pshader", nullptr, nullptr, "ps_main", "ps_5_0", flags, 0, &p_compiled, &p_error);
-	if (p_error)
-	{
-		auto title = p_compiled ? "Warning" : "Error";
-		auto style = p_compiled ? MB_ICONWARNING : MB_ICONERROR;
-		MessageBox(0, static_cast<const char *>(p_error->GetBufferPointer()), title, style);
-	}
+	Comptr<ID3DBlob> p_compiled = compileShader("shader/pshader.hlsl", "ps_5_0", "ps_main");
 	if (!p_compiled)
-	{
 		return false;
-	}
 
 	auto device = graphics->GetDevice();
 	HRESULT hr = device->CreateVertexShader(v_compiled->GetBufferPointer(), v_compiled->GetBufferSize(), 0, &v_shader);
@@ -369,7 +272,6 @@ bool Application::initShaders()
 	if (FAILED(hr))
 		return false;
 	
-	auto context = graphics->GetContext();
 	context->VSSetShader(v_shader, nullptr, 0);
 	context->PSSetShader(p_shader, nullptr, 0);
 
@@ -446,40 +348,45 @@ bool Application::initGeometry()
 
 void Application::render()
 {
-	float clear_color[4] = {0.2f, 0.f, 0.f, 0.f};
+	float clear_color[4] = {0.25f, 0.f, 0.f, 0.f};
 	auto ctx = graphics->GetContext();
 	ctx->ClearRenderTargetView(graphics->GetMainRendertargetView(), clear_color);
 	ctx->ClearDepthStencilView(graphics->GetMainDepthStencilView(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.f, 0);
 
-	D3D11_MAPPED_SUBRESOURCE sub;
-	ctx->Map(camera_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &sub);
-	camera_cbuffer *cam_buf = static_cast<camera_cbuffer *>(sub.pData);
-	cam_buf->eye = camera.GetEye();
-	cam_buf->front_vec = camera.GetDirection();
-	cam_buf->right_vec = (camera.GetFrustrumEdge(0) - camera.GetFrustrumEdge(3)) * 0.5f;
-	cam_buf->top_vec = (camera.GetFrustrumEdge(0) - camera.GetFrustrumEdge(1)) * 0.5f;
-
-	ctx->Unmap(camera_buffer, 0);
-	ctx->PSSetConstantBuffers(0, 1, &camera_buffer);
-
-	UINT v_strides[] =
+	// only render something if the shader step was successful, else show a blank screen
+	if (v_shader && p_shader && input_layout)
 	{
-		sizeof(Vertex),
-	};
-	UINT v_offsets[] =
-	{
-		0,
-	};
-	ID3D11Buffer *vertex_buffers[] =
-	{
-		vertex_buffer,
-	};
-	ctx->IASetVertexBuffers(0, 1, vertex_buffers, v_strides, v_offsets);
-	ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		D3D11_MAPPED_SUBRESOURCE sub;
+		ctx->Map(camera_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &sub);
+		camera_cbuffer *cam_buf = static_cast<camera_cbuffer *>(sub.pData);
+		cam_buf->eye = camera.GetEye();
+		cam_buf->front_vec = camera.GetDirection();
+		cam_buf->right_vec = (camera.GetFrustrumEdge(0) - camera.GetFrustrumEdge(3)) * 0.5f;
+		cam_buf->top_vec = (camera.GetFrustrumEdge(0) - camera.GetFrustrumEdge(1)) * 0.5f;
+		cam_buf->stime = stime;
 
-	ctx->IASetIndexBuffer(index_buffer, DXGI_FORMAT_R16_UINT, 0);
+		ctx->Unmap(camera_buffer, 0);
+		ctx->PSSetConstantBuffers(0, 1, &camera_buffer);
 
-	ctx->DrawIndexed(6, 0, 0);
+		UINT v_strides[] =
+		{
+			sizeof(Vertex),
+		};
+		UINT v_offsets[] =
+		{
+			0,
+		};
+		ID3D11Buffer *vertex_buffers[] =
+		{
+			vertex_buffer,
+		};
+		ctx->IASetVertexBuffers(0, 1, vertex_buffers, v_strides, v_offsets);
+		ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		ctx->IASetIndexBuffer(index_buffer, DXGI_FORMAT_R16_UINT, 0);
+
+		ctx->DrawIndexed(6, 0, 0);
+	}
 
 	graphics->Present();
 	graphics->WaitForVBlank();
