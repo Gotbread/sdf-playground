@@ -18,6 +18,10 @@ cbuffer camera
 	float3 front_vec;
 	float3 right_vec;
 	float3 top_vec;
+	
+	float3 debug_plane_point;
+	float3 debug_plane_normal;
+
 	float _unused;
 	float stime;
 };
@@ -75,9 +79,9 @@ float3 debug_plane_color(float scene_distance)
 
 float2 map_debug(float3 p, float3 dir, out float3 material_property)
 {
-	float distance_cut_plane = sdPlaneFast(p, dir, float3(0.f, 0.f, -1.f));
+	float distance_cut_plane = sdPlaneFast(p - debug_plane_point, dir, debug_plane_normal);
 	float2 distance_scene = map(p, dir, material_property);
-	if (use_debug_plane && distance_cut_plane < distance_scene.x)
+	if (dot(debug_plane_normal, debug_plane_normal) > 0.5f && distance_cut_plane < distance_scene.x)
 	{
 		material_property = debug_plane_color(distance_scene.x);
 		return float2(distance_cut_plane, 0.f);

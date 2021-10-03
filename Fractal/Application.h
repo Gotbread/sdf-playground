@@ -24,6 +24,7 @@ private:
 	{
 		alignas(16) Math3D::Vector3 eye;
 		alignas(16) Math3D::Vector3 front_vec, right_vec, top_vec;
+		alignas(16) Math3D::Vector3 debug_plane_point, debug_plane_normal;
 		alignas(16) float stime;
 	};
 
@@ -50,8 +51,17 @@ private:
 
 	Camera camera;
 	float stime;
+	float scroll_pos1, scroll_pos2;
+	bool show_debug_plane;
 
 	POINT lastmouse;
-	bool mouse_tracking;
 	bool keystate[256];
+
+	enum MouseButton
+	{
+		Left = 0,
+		Middle = 1,
+		Right = 2,
+	};
+	bool mouse_state[3];
 };

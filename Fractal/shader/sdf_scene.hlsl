@@ -1,9 +1,6 @@
 #include "sdf_primitive.hlsl"
 
 
-// use the debug plane?
-static const bool use_debug_plane = true;
-
 // currently not in use
 //float sierpinski(float3 p, uint depth)
 //{

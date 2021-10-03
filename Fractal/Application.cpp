@@ -52,11 +52,15 @@ bool Application::Init(HINSTANCE hInstance)
 		return false;
 	}
 
-	mouse_tracking = false;
 	for (auto &elem : keystate)
 	{
 		elem = false;
 	}
+	for (auto &elem : mouse_state)
+	{
+		elem = false;
+	}
+	show_debug_plane = false;
 
 	return initGraphics();
 }
@@ -109,15 +113,23 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 	{
 	case WM_MOUSEMOVE:
 		{
-			if (mouse_tracking)
+			int xdiff = LOWORD(lParam) - lastmouse.x;
+			int ydiff = HIWORD(lParam) - lastmouse.y;
+			if (mouse_state[MouseButton::Left])
 			{
-				int xdiff = LOWORD(lParam) - lastmouse.x;
-				int ydiff = HIWORD(lParam) - lastmouse.y;
 				if (xdiff || ydiff)
 				{
 					camera.RotateY(xdiff / -500.f);
 					camera.RotateX(ydiff / -500.f);
 				}
+			}
+			if (mouse_state[MouseButton::Middle])
+			{
+				scroll_pos1 += xdiff / 1000.f;
+				scroll_pos1 = std::min(std::max(scroll_pos1, -1.f), +1.f);
+
+				scroll_pos2 += ydiff / 1000.f;
+				scroll_pos2 = std::min(std::max(scroll_pos2, -10.f), +10.f);
 			}
 			lastmouse.x = LOWORD(lParam);
 			lastmouse.y = HIWORD(lParam);
@@ -141,10 +153,23 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 		keystate[static_cast<char>(LOWORD(wParam))] = false;
 		break;
 	case WM_LBUTTONDOWN:
-		mouse_tracking = true;
+		mouse_state[MouseButton::Left] = true;
 		break;
 	case WM_LBUTTONUP:
-		mouse_tracking = false;
+		mouse_state[MouseButton::Left] = false;
+		break;
+	case WM_MBUTTONDOWN:
+		mouse_state[MouseButton::Middle] = true;
+		show_debug_plane ^= true;
+		break;
+	case WM_MBUTTONUP:
+		mouse_state[MouseButton::Middle] = false;
+		break;
+	case WM_RBUTTONDOWN:
+		mouse_state[MouseButton::Right] = true;
+		break;
+	case WM_RBUTTONUP:
+		mouse_state[MouseButton::Right] = false;
 		break;
 	case WM_DESTROY:
 		PostQuitMessage(0);
@@ -184,6 +209,8 @@ bool Application::initGraphics()
 	camera.SetLookat(Vector3(0.f, 1.f, 0.f));
 
 	stime = 0.f;
+	scroll_pos1 = 1.f;
+	scroll_pos2 = 0.f;
 
 	return true;
 }
@@ -363,6 +390,24 @@ void Application::render()
 		cam_buf->front_vec = camera.GetDirection();
 		cam_buf->right_vec = (camera.GetFrustrumEdge(0) - camera.GetFrustrumEdge(3)) * 0.5f;
 		cam_buf->top_vec = (camera.GetFrustrumEdge(0) - camera.GetFrustrumEdge(1)) * 0.5f;
+		
+		if (show_debug_plane)
+		{
+			if (scroll_pos1 > 0.f)
+			{
+				cam_buf->debug_plane_normal = Math3D::Matrix4x4::RotationXMatrix(scroll_pos1 * Math3D::PI * +0.5f) * Math3D::Vector3(0.f, 1.f, 0.f);
+			}
+			else
+			{
+				cam_buf->debug_plane_normal = Math3D::Matrix4x4::RotationZMatrix(scroll_pos1 * Math3D::PI * -0.5f) * Math3D::Vector3(0.f, 1.f, 0.f);
+			}
+		}
+		else
+		{
+			cam_buf->debug_plane_normal = Math3D::Vector3::NullVector();
+		}
+		cam_buf->debug_plane_point = cam_buf->debug_plane_normal * scroll_pos2;
+
 		cam_buf->stime = stime;
 
 		ctx->Unmap(camera_buffer, 0);
