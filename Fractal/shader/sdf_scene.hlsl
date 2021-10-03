@@ -38,11 +38,18 @@
 
 float vase(float3 pos)
 {
-	float obj1 = sdSphere(pos - float3(0.f, 2.f, 0.f), 0.5f);
+	float obj1 = sdSphere(pos - float3(0.f, 1.89f, 0.f), 0.5f);
 	float obj2 = sdCappedCylinder(pos - float3(0.f, 0.8f, 0.f), 0.75f, 0.2f);
-	float obj3 = sdBox(pos - float3(0.f, 0.1f, 0.f), float3(0.4f, 0.1f, 0.4f));
-	//return min(min(obj1, obj2), obj3);
-	return opChamferMerge(min(obj1, obj2), obj3, 0.1f);
+	float obj3 = sdBox(pos - float3(0.f, 0.075f, 0.f), float3(0.4f, 0.075f, 0.4f));
+	float cut_plane1 = sdPlane(pos - float3(0.f, 1.9f, 0.f), float3(0.f, 1.f, 0.f));
+	float cut_plane2 = sdPlane(pos - float3(0.f, 1.5f, 0.f), float3(0.f, -1.f, 0.f));
+
+	float d = max(obj1, cut_plane2);
+	d = opPipeMerge(d, obj2, 0.1f, 4.f);
+	d = opPipeMerge(d, obj3, 0.1f, 4.f);
+	d = max(d, cut_plane1);
+	d = max(d, -obj1 - 0.06f);
+	return d;
 }
 
 // return value:
@@ -53,7 +60,6 @@ float vase(float3 pos)
 // extra vector, meaning depends on material
 float2 map(float3 pos, float3 dir, out float3 material_property)
 {
-	/*
 	// wall
 	float3 wall_pos = pos;
 	wall_pos.xz = opRepInf(wall_pos.xz, float2(20.f, 20.f));
@@ -79,8 +85,8 @@ float2 map(float3 pos, float3 dir, out float3 material_property)
 	// select
 	if (obj1 < wall && obj1 < floor1)
 	{
-		material_property = pos;
-		return float2(obj1, 6.f);
+		material_property = pos * 3.f;
+		return float2(obj1, 4.f);
 	}
 	else if (wall < floor1)
 	{
@@ -93,11 +99,11 @@ float2 map(float3 pos, float3 dir, out float3 material_property)
 		float tile_parity = round(frac((tile_pos.x + tile_pos.y) * 0.5f + 0.25f));
 		material_property = tile_parity > 0.5f ? float3(0.1f, 0.1f, 0.1f) : float3(0.8f, 0.8f, 0.8f);
 		return float2(floor1, 3.f);
-	}*/
+	}
 
 
 	// testing
-	float obj1 = vase(pos);
+	/*float obj1 = vase(pos);
 
 	// floor
 	float floor1 = sdPlane(pos, float3(0.f, 1.f, 0.f));
@@ -105,8 +111,8 @@ float2 map(float3 pos, float3 dir, out float3 material_property)
 	// select
 	if (obj1 < floor1)
 	{
-		material_property = float3(1.f, 0.75f, 0.1f);
-		return float2(obj1, 3.f);
+		material_property = pos * 3.f;
+		return float2(obj1, 4.f);
 	}
 	else
 	{
@@ -114,5 +120,5 @@ float2 map(float3 pos, float3 dir, out float3 material_property)
 		float tile_parity = round(frac((tile_pos.x + tile_pos.y) * 0.5f + 0.25f));
 		material_property = tile_parity > 0.5f ? float3(0.1f, 0.1f, 0.1f) : float3(0.8f, 0.8f, 0.8f);
 		return float2(floor1, 3.f);
-	}
+	}*/
 }

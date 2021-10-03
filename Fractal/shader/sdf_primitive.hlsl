@@ -37,7 +37,7 @@ float sdPlaneFast(float3 pos, float3 dir, float3 plane_norm)
 {
 	float plane_dist = dot(pos, plane_norm);
 	float scale = dot(dir, -plane_norm);
-	return plane_dist / saturate(scale);
+	return plane_dist / (saturate(scale) + 0.0001f);
 }
 
 float sdTorusXY(float3 pos, float radius_big, float radius_small)
