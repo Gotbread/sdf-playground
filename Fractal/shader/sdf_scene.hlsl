@@ -2,14 +2,15 @@
 
 
 // use the debug plane?
-static const bool use_debug_plane = false;
+static const bool use_debug_plane = true;
 
 float vase(float3 pos)
 {
 	float obj1 = sdSphere(pos - float3(0.f, 2.f, 0.f), 0.5f);
-	float obj2 = sdCappedCylinder(pos - float3(0.f, 0.75f, 0.f), 0.75f, 0.2f);
+	float obj2 = sdCappedCylinder(pos - float3(0.f, 0.8f, 0.f), 0.75f, 0.2f);
 	float obj3 = sdBox(pos - float3(0.f, 0.1f, 0.f), float3(0.4f, 0.1f, 0.4f));
-	return min(min(obj1, obj2), obj3);
+	//return min(min(obj1, obj2), obj3);
+	return opChamferMerge(min(obj1, obj2), obj3, 0.1f);
 }
 
 // return value:
