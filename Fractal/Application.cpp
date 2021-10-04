@@ -24,7 +24,7 @@ bool Application::Init(HINSTANCE hInstance)
 
 	RegisterClass(&wc);
 
-	bool fullscreen = true;
+	bool fullscreen = false;
 	std::string title = "SDF Fractal";
 
 	if (fullscreen)
@@ -38,8 +38,8 @@ bool Application::Init(HINSTANCE hInstance)
 		unsigned windowstyle = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
 		int xpos = CW_USEDEFAULT;
 		int ypos = CW_USEDEFAULT;
-		unsigned width = 800;
-		unsigned height = 600;
+		unsigned width = 1920 / 16;// 800;
+		unsigned height = 1080 / 16; // 600;
 
 		RECT r;
 		SetRect(&r, 0, 0, width, height);
@@ -195,6 +195,8 @@ bool Application::initGraphics()
 
 	if (!initGeometry())
 		return false;
+
+	profiler.setGPU(graphics->GetDevice(), graphics->GetContext());
 
 	RECT rect;
 	GetClientRect(hWnd, &rect);
@@ -381,10 +383,25 @@ bool Application::initGeometry()
 
 void Application::render()
 {
+	if (profiler.fetchResults())
+	{
+		auto results = profiler.getResults();
+		OutputDebugString("======================\n");
+		for (auto &elem : results)
+		{
+			std::string name = elem.first.empty() ? "Total" : elem.first;
+			std::string msg = Format() << name << ": " << elem.second * 1000.f << "ms\n";
+			OutputDebugString(msg.c_str());
+		}
+	}
+
 	float clear_color[4] = {0.25f, 0.f, 0.f, 0.f};
 	auto ctx = graphics->GetContext();
+
+	profiler.beginFrame();
 	ctx->ClearRenderTargetView(graphics->GetMainRendertargetView(), clear_color);
 	ctx->ClearDepthStencilView(graphics->GetMainDepthStencilView(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.f, 0);
+	profiler.profile("clear");
 
 	// only render something if the shader step was successful, else show a blank screen
 	if (v_shader && p_shader && input_layout)
@@ -437,10 +454,17 @@ void Application::render()
 
 		ctx->IASetIndexBuffer(index_buffer, DXGI_FORMAT_R16_UINT, 0);
 
+		profiler.profile("setup");
+
 		ctx->DrawIndexed(6, 0, 0);
+
+		profiler.profile("draw");
 	}
 
 	graphics->Present();
+	profiler.profile("present");
+	profiler.endFrame();
+
 	graphics->WaitForVBlank();
 }
 

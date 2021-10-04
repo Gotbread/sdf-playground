@@ -3,10 +3,12 @@
 #include <Windows.h>
 #include <memory>
 #include <string>
+#include <map>
 
 #include "Graphics.h"
 #include "Camera.h"
 #include "Math3D.h"
+#include "GPUProfiler.h"
 
 
 class Application
@@ -51,6 +53,8 @@ private:
 	Comptr<ID3D11VertexShader> v_shader;
 	Comptr<ID3D11PixelShader> p_shader;
 	Comptr<ID3D11InputLayout> input_layout;
+
+	GPUProfiler profiler;
 
 	Camera camera;
 	float stime;
