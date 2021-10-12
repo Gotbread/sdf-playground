@@ -24,7 +24,7 @@ bool Application::Init(HINSTANCE hInstance)
 
 	RegisterClass(&wc);
 
-	bool fullscreen = false;
+	bool fullscreen = true;
 	std::string title = "SDF Fractal";
 
 	if (fullscreen)
