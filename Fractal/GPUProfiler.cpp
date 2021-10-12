@@ -50,9 +50,8 @@ void GPUProfiler::profile(const std::string &name)
 	{
 		auto iter = getQueryByName(name);
 		ctx->End(iter->query);
-		// move the query to the slot after the last query (or the beginning, if it was the first
-		std::swap(*iter, active->queries[active->last_query_index + 1]);
-		active->last_query_index = iter - active->queries.begin();
+		// move the query to the next slot
+		std::swap(*iter, active->queries[++active->last_query_index]);
 	}
 }
 
