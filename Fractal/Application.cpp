@@ -7,6 +7,7 @@
 #include "Application.h"
 #include "Math3D.h"
 #include "Util.h"
+#include "ShaderIncluder.h"
 
 #pragma comment(lib, "d3dcompiler.lib")
 
@@ -224,15 +225,14 @@ bool Application::initGraphics()
 }
 
 
-Comptr<ID3DBlob> Application::compileShader(const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings, bool disassemble)
+Comptr<ID3DBlob> Application::compileShader(ShaderIncluder &includer, const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings, bool disassemble)
 {
+	std::string code;
 	// first load the file
-	std::ifstream file(filename);
-	if (!file)
+	if (!includer.loadFromFile(filename, code))
 	{
 		ErrorBox(Format() << "Could not load file \"" << filename << "\"");
 	}
-	std::string code = readFromFile(file);
 
 	// then try to compile it
 	UINT flags =
@@ -242,7 +242,7 @@ Comptr<ID3DBlob> Application::compileShader(const std::string &filename, const s
 		0;
 
 	Comptr<ID3DBlob> compiled, error;
-	D3DCompile(code.c_str(), code.length(), filename.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, entry.c_str(), profile.c_str(), flags, 0, &compiled, &error);
+	D3DCompile(code.c_str(), code.length(), filename.c_str(), nullptr,  &includer, entry.c_str(), profile.c_str(), flags, 0, &compiled, &error);
 	if (error)
 	{
 		if (!compiled) // no code, thus an error
@@ -290,11 +290,15 @@ bool Application::initShaders()
 #endif
 		0;
 
-	Comptr<ID3DBlob> v_compiled = compileShader("shader/vshader.hlsl", "vs_5_0", "vs_main");
+	ShaderIncluder includer;
+	includer.setFolder("shader");
+	includer.setSubstitutions({ {"sdf_scene.hlsl", "sdf_scene_fractal.hlsl"} });
+
+	Comptr<ID3DBlob> v_compiled = compileShader(includer, "vshader.hlsl", "vs_5_0", "vs_main");
 	if (!v_compiled)
 		return false;
 
-	Comptr<ID3DBlob> p_compiled = compileShader("shader/pshader.hlsl", "ps_5_0", "ps_main");
+	Comptr<ID3DBlob> p_compiled = compileShader(includer, "pshader.hlsl", "ps_5_0", "ps_main");
 	if (!p_compiled)
 		return false;
 

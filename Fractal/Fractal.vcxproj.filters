@@ -36,6 +36,9 @@
     <ClCompile Include="GPUProfiler.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
+    <ClCompile Include="ShaderIncluder.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Application.h">
@@ -57,6 +60,12 @@
       <Filter>Headerdateien</Filter>
     </ClInclude>
     <ClInclude Include="GPUProfiler.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="SceneManager.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="ShaderIncluder.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
   </ItemGroup>

@@ -10,6 +10,7 @@
 #include "Math3D.h"
 #include "GPUProfiler.h"
 
+class ShaderIncluder;
 
 class Application
 {
@@ -42,7 +43,7 @@ private:
 	void render();
 	void updateSimulation(float dt);
 
-	Comptr<ID3DBlob> compileShader(const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings = true, bool disassemble = false);
+	Comptr<ID3DBlob> compileShader(ShaderIncluder &, const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings = true, bool disassemble = false);
 
 	HINSTANCE hInstance;
 	HWND hWnd;
