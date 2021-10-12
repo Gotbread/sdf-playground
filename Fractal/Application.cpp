@@ -71,6 +71,8 @@ void Application::Run()
 {
 	ShowWindow(hWnd, SW_SHOWNORMAL);
 
+	// the overflow warning can be ignored. since we are taking the difference only
+	// and a frame wont last more than 49 days (hopefully), we cant overflow
 	DWORD lasttime = GetTickCount();
 
 	MSG Msg;
