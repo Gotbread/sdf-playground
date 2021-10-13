@@ -11,6 +11,7 @@ void SceneManager::InitClass(HINSTANCE hInstance)
 	WNDCLASS wc = { 0 };
 	wc.cbWndExtra = sizeof(this);
 	wc.hCursor = LoadCursor(0, IDC_ARROW);
+	wc.hbrBackground = CreateSolidBrush(RGB(255, 255, 255));
 	wc.hInstance = hInstance;
 	wc.lpszClassName = classname;
 	wc.lpfnWndProc = sWndProc;

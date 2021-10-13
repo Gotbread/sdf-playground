@@ -18,7 +18,6 @@ bool Application::Init(HINSTANCE hInstance)
 	WNDCLASS wc = { 0 };
 	wc.cbWndExtra = sizeof(this);
 	wc.hCursor = LoadCursor(0, IDC_ARROW);
-	wc.hbrBackground = CreateSolidBrush(RGB(255, 255, 255));
 	wc.hInstance = hInstance;
 	wc.lpszClassName = "Mainwnd";
 	wc.lpfnWndProc = sWndProc;
