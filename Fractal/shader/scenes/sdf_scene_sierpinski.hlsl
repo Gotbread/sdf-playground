@@ -1,12 +1,11 @@
 #include "sdf_primitive.hlsl"
 
-
 float sierpinski(float3 p, uint depth)
 {
-      float3 a1 = float3(+1.f, +1.f, +1.f);
-      float3 a2 = float3(-1.f, -1.f, +1.f);
-      float3 a3 = float3(+1.f, -1.f, -1.f);
-      float3 a4 = float3(-1.f, +1.f, -1.f);
+      float3 a1 = float3(0.f, +1.f, 0.f);
+      float3 a2 = float3(-0.7f, 0.f, -0.5f);
+      float3 a3 = float3(+0.7f, 0.f, -0.5f);
+      float3 a4 = float3(0.f, 0.f, +0.7f);
       float scale = 2.f;
       for (uint iter = 0; iter < depth; ++iter)
       {
@@ -32,7 +31,7 @@ float sierpinski(float3 p, uint depth)
               }
               p = scale * p - c * (scale - 1.f);
       }
-      return length(p) / pow(scale, depth) - 2 * dist_eps;
+      return length(p) / pow(scale, depth) - 0.002f;
 }
 
 // params:
@@ -49,7 +48,7 @@ float sierpinski(float3 p, uint depth)
 // extra vector, meaning depends on material
 float2 map(float4 pos, float3 dir, out float3 material_property)
 {
-    float obj = sierpinski(pos.xyz, 5);
+    float obj = sierpinski(pos.xyz, 10);
 
     material_property = float3(0.9f, 0.7f, 0.2f);
     return float2(obj, 3.f);
