@@ -8,6 +8,7 @@
 static const float sqrt_half = 0.7071067811865f;
 static const float sqrt_two = 1.414213562373096f;
 static const float pi = 3.14159265358979323f;
+static const float tau = 6.28318530717958647f;
 
 float sdSphere(float3 pos, float radius)
 {
