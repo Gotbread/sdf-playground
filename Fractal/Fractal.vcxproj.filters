@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Ressourcendateien\shader">
+      <UniqueIdentifier>{7aa34e49-33bb-49d2-89f7-a84153e24f4e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Application.cpp">
@@ -37,6 +40,12 @@
       <Filter>Quelldateien</Filter>
     </ClCompile>
     <ClCompile Include="ShaderIncluder.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
+    <ClCompile Include="SceneManager.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
+    <ClCompile Include="WinUtil.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
   </ItemGroup>
@@ -68,5 +77,28 @@
     <ClInclude Include="ShaderIncluder.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
+    <ClInclude Include="WinUtil.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="shader\noise.hlsl">
+      <Filter>Ressourcendateien\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="shader\pshader.hlsl">
+      <Filter>Ressourcendateien\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="shader\sdf_primitive.hlsl">
+      <Filter>Ressourcendateien\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="shader\sdf_scene_cube.hlsl">
+      <Filter>Ressourcendateien\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="shader\sdf_scene_fractal.hlsl">
+      <Filter>Ressourcendateien\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="shader\vshader.hlsl">
+      <Filter>Ressourcendateien\shader</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

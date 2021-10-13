@@ -7,7 +7,6 @@
 #include "Application.h"
 #include "Math3D.h"
 #include "Util.h"
-#include "ShaderIncluder.h"
 
 #pragma comment(lib, "d3dcompiler.lib")
 
@@ -19,6 +18,7 @@ bool Application::Init(HINSTANCE hInstance)
 	WNDCLASS wc = { 0 };
 	wc.cbWndExtra = sizeof(this);
 	wc.hCursor = LoadCursor(0, IDC_ARROW);
+	wc.hbrBackground = CreateSolidBrush(RGB(255, 255, 255));
 	wc.hInstance = hInstance;
 	wc.lpszClassName = "Mainwnd";
 	wc.lpfnWndProc = sWndProc;
@@ -52,6 +52,16 @@ bool Application::Init(HINSTANCE hInstance)
 	{
 		return false;
 	}
+
+	includer = std::make_unique<ShaderIncluder>();
+	includer->setFolder("shader");
+
+	scene_manager = std::make_unique<SceneManager>();
+	scene_manager->setClient(this);
+	scene_manager->InitClass(hInstance);
+	scene_manager->setShaderFolder("shader");
+	scene_manager->setSceneFolder("scenes");
+	scene_manager->Open(hInstance);
 
 	for (auto &elem : keystate)
 	{
@@ -146,15 +156,30 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 	case WM_KEYDOWN:
 		// for movement
 		keystate[static_cast<char>(LOWORD(wParam))] = true;
-		// for events
-		switch (LOWORD(wParam))
+
+		if (keystate[VK_CONTROL]) // ctrl events
 		{
-		case VK_ESCAPE: // quit
-			PostQuitMessage(0);
-			break;
-		case 'R': // reload shader
-			initShaders();
-			break;
+			switch (LOWORD(wParam))
+			{
+			case 'R': // reload shader
+				initShaders();
+				break;
+			case 'S': // scene manager
+				scene_manager->Open(hInstance);
+				break;
+			case 'V': // variable manager
+				break;
+			}
+		}
+		else
+		{
+			// for normal events
+			switch (LOWORD(wParam))
+			{
+			case VK_ESCAPE: // quit
+				PostQuitMessage(0);
+				break;
+			}
 		}
 		break;
 	case WM_KEYUP:
@@ -193,9 +218,6 @@ bool Application::initGraphics()
 	if (!graphics->init(hWnd))
 		return false;
 
-	if (!initShaders())
-		return false;
-
 	if (!initGeometry())
 		return false;
 
@@ -227,11 +249,11 @@ bool Application::initGraphics()
 }
 
 
-Comptr<ID3DBlob> Application::compileShader(ShaderIncluder &includer, const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings, bool disassemble)
+Comptr<ID3DBlob> Application::compileShader(const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings, bool disassemble)
 {
 	std::string code;
 	// first load the file
-	if (!includer.loadFromFile(filename, code))
+	if (!includer->loadFromFile(filename, code))
 	{
 		ErrorBox(Format() << "Could not load file \"" << filename << "\"");
 	}
@@ -244,7 +266,7 @@ Comptr<ID3DBlob> Application::compileShader(ShaderIncluder &includer, const std:
 		0;
 
 	Comptr<ID3DBlob> compiled, error;
-	D3DCompile(code.c_str(), code.length(), filename.c_str(), nullptr,  &includer, entry.c_str(), profile.c_str(), flags, 0, &compiled, &error);
+	D3DCompile(code.c_str(), code.length(), filename.c_str(), nullptr,  includer.get(), entry.c_str(), profile.c_str(), flags, 0, &compiled, &error);
 	if (error)
 	{
 		if (!compiled) // no code, thus an error
@@ -292,15 +314,11 @@ bool Application::initShaders()
 #endif
 		0;
 
-	ShaderIncluder includer;
-	includer.setFolder("shader");
-	includer.setSubstitutions({ {"sdf_scene.hlsl", "sdf_scene_fractal.hlsl"} });
-
-	Comptr<ID3DBlob> v_compiled = compileShader(includer, "vshader.hlsl", "vs_5_0", "vs_main");
+	Comptr<ID3DBlob> v_compiled = compileShader("vshader.hlsl", "vs_5_0", "vs_main");
 	if (!v_compiled)
 		return false;
 
-	Comptr<ID3DBlob> p_compiled = compileShader(includer, "pshader.hlsl", "ps_5_0", "ps_main");
+	Comptr<ID3DBlob> p_compiled = compileShader("pshader.hlsl", "ps_5_0", "ps_main");
 	if (!p_compiled)
 		return false;
 
@@ -510,4 +528,10 @@ void Application::updateSimulation(float dt)
 	}
 
 	camera.MoveRel(move * dt);
+}
+
+void Application::loadScene(const std::filesystem::path &filename)
+{
+	includer->setSubstitutions({ {"sdf_scene.hlsl", filename.string()} });
+	initShaders();
 }

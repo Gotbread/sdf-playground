@@ -9,10 +9,10 @@
 #include "Camera.h"
 #include "Math3D.h"
 #include "GPUProfiler.h"
+#include "SceneManager.h"
+#include "ShaderIncluder.h"
 
-class ShaderIncluder;
-
-class Application
+class Application : public SceneManagerClient
 {
 public:
 	bool Init(HINSTANCE hInstance);
@@ -43,12 +43,17 @@ private:
 	void render();
 	void updateSimulation(float dt);
 
-	Comptr<ID3DBlob> compileShader(ShaderIncluder &, const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings = true, bool disassemble = false);
+	Comptr<ID3DBlob> compileShader(const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings = true, bool disassemble = false);
+
+	// callbacks
+	void loadScene(const std::filesystem::path &filename);
 
 	HINSTANCE hInstance;
 	HWND hWnd;
 
+	std::unique_ptr<SceneManager> scene_manager;
 	std::unique_ptr<Graphics> graphics;
+	std::unique_ptr<ShaderIncluder> includer;
 
 	Comptr<ID3D11Buffer> vertex_buffer, index_buffer, camera_buffer;
 	Comptr<ID3D11VertexShader> v_shader;
