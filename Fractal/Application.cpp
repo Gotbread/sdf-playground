@@ -52,6 +52,11 @@ bool Application::Init(HINSTANCE hInstance)
 		return false;
 	}
 
+	if (!initGraphics())
+	{
+		return false;
+	}
+
 	includer = std::make_unique<ShaderIncluder>();
 	includer->setFolder("shader");
 
@@ -72,7 +77,7 @@ bool Application::Init(HINSTANCE hInstance)
 	}
 	show_debug_plane = false;
 
-	return initGraphics();
+	return true;
 }
 
 
