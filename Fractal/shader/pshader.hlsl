@@ -35,7 +35,9 @@ static const float dist_eps = 0.0001f;    // how close to the object before term
 static const float grad_eps = 0.0001f;    // how far to move when computing the gradient
 static const float shadow_eps = 0.0003f;   // how far to step along the light ray when looking for occluders
 static const float max_dist_check = 1e30; // maximum practical number
-static const float3 lighting_dir = normalize(float3(-1.f, -2.f, 1.5f));
+
+static const float3 lighting_dir = normalize(float3(-1.f, -1.f, 1.5f));
+static const float ambient_lighting_factor = 0.1f;
 
 static const float debug_ruler_scale = 0.01f;
 
@@ -246,7 +248,7 @@ float4 colorize(float3 pos, float3 dir, float scene_distance, float iter_count, 
 		}
 
 		float3 normal = grad(pos, scene_distance, 0.f);
-		float diffuse_shading = clamp(dot(normal, lighting_dir), 0.1f, 1.f);
+		float diffuse_shading = saturate(dot(normal, lighting_dir));
 		float3 specular_ref = reflect(lighting_dir, normal);
 		float specular_shading = pow(saturate(dot(specular_ref, -dir)), 12.f);
 		float3 specular_color = float3(1.f, 1.f, 1.f);
@@ -255,11 +257,11 @@ float4 colorize(float3 pos, float3 dir, float scene_distance, float iter_count, 
 		bool obstructed = raymarch_scene_obstruction(pos - normal * shadow_eps, -lighting_dir, 100.f, scene_rel_distance);
 		if (obstructed)
 		{
-			diffuse_shading *= 0.3f;
+			diffuse_shading = 0.f;
 			specular_shading = 0.f;
 		}
 
-		col = diffuse_color * diffuse_shading + specular_color * specular_shading;
+		col = diffuse_color * (diffuse_shading + ambient_lighting_factor) + specular_color * specular_shading;
 	}
 	return float4(col + extra_color, 1.f);
 }
