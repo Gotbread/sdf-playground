@@ -106,6 +106,19 @@ float2 opRepInf(float2 pos, float2 size)
 	return x - size * floor(x / size) - size * 0.5f;
 }
 
+float opRepAngle(inout float2 pos, float count)
+{
+	float angle = atan2(pos.y, pos.x);
+
+	float reduced_angle = angle * count / tau + 0.5f;
+	float index = floor(reduced_angle);
+	reduced_angle -= index;
+	angle = (reduced_angle - 0.5f) * tau / count;
+
+	pos = float2(cos(angle), sin(angle)) * length(pos);
+	return index;
+}
+
 float2 opRotate(float2 pos, float angle)
 {
 	float s = sin(angle);
