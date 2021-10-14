@@ -12,6 +12,7 @@
 #include "SceneManager.h"
 #include "ShaderUtil.h"
 #include "SDFRenderer.h"
+#include "Postprocessing.h"
 
 class Application : public SceneManagerClient
 {
@@ -36,6 +37,7 @@ private:
 	std::unique_ptr<SceneManager> scene_manager;
 	std::unique_ptr<ShaderIncluder> includer;
 	std::unique_ptr<SDFRenderer> sdf_renderer;
+	std::unique_ptr<HDR> hdr;
 
 	GPUProfiler profiler;
 

@@ -15,8 +15,6 @@ bool SDFRenderer::init(Graphics *graphics)
 
 bool SDFRenderer::initShader(ShaderIncluder &includer)
 {
-	auto context = graphics->GetContext();
-
 	// remove old objects. since d3d keeps a reference internally
 	// the object is not freed yet. setting it to zero ensures
 	// we dont overwrite it later and loose the pointer.
@@ -29,7 +27,7 @@ bool SDFRenderer::initShader(ShaderIncluder &includer)
 	if (!v_compiled)
 		return false;
 
-	Comptr<ID3DBlob> p_compiled = compileShader(includer, "pshader.hlsl", "ps_5_0", "ps_main");
+	Comptr<ID3DBlob> p_compiled = compileShader(includer, "pshader_sdf.hlsl", "ps_5_0", "ps_main");
 	if (!p_compiled)
 		return false;
 
@@ -41,9 +39,6 @@ bool SDFRenderer::initShader(ShaderIncluder &includer)
 	hr = device->CreatePixelShader(p_compiled->GetBufferPointer(), p_compiled->GetBufferSize(), 0, &p_shader);
 	if (FAILED(hr))
 		return false;
-
-	context->VSSetShader(v_shader, nullptr, 0);
-	context->PSSetShader(p_shader, nullptr, 0);
 
 	// build the input assembler
 	D3D11_INPUT_ELEMENT_DESC input_desc[] =
@@ -112,17 +107,15 @@ bool SDFRenderer::initGeometry()
 	return true;
 }
 
-void SDFRenderer::render(GPUProfiler &profiler, Camera &camera)
+bool SDFRenderer::render(GPUProfiler &profiler, Camera &camera)
 {
 	auto ctx = graphics->GetContext();
 
 	// only render something if we have a valid shader
 	if (!(v_shader && p_shader && input_layout))
 	{
-		return;
+		return false;
 	}
-
-	ctx->IASetInputLayout(input_layout);
 
 	D3D11_MAPPED_SUBRESOURCE sub;
 	ctx->Map(camera_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &sub);
@@ -155,21 +148,15 @@ void SDFRenderer::render(GPUProfiler &profiler, Camera &camera)
 	ctx->Unmap(camera_buffer, 0);
 	ctx->PSSetConstantBuffers(0, 1, &camera_buffer);
 
-	UINT v_strides[] =
-	{
-		sizeof(Vertex),
-	};
-	UINT v_offsets[] =
-	{
-		0,
-	};
-	ID3D11Buffer *vertex_buffers[] =
-	{
-		vertex_buffer,
-	};
+	ctx->VSSetShader(v_shader, nullptr, 0);
+	ctx->PSSetShader(p_shader, nullptr, 0);
+
+	UINT v_strides[] = { sizeof(Vertex) };
+	UINT v_offsets[] = { 0 };
+	ID3D11Buffer *vertex_buffers[] = { vertex_buffer };
+	ctx->IASetInputLayout(input_layout);
 	ctx->IASetVertexBuffers(0, 1, vertex_buffers, v_strides, v_offsets);
 	ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
 	ctx->IASetIndexBuffer(index_buffer, DXGI_FORMAT_R16_UINT, 0);
 
 	profiler.profile("setup");
@@ -177,4 +164,6 @@ void SDFRenderer::render(GPUProfiler &profiler, Camera &camera)
 	ctx->DrawIndexed(6, 0, 0);
 
 	profiler.profile("draw");
+
+	return true;
 }

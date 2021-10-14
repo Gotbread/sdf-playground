@@ -16,7 +16,8 @@ public:
 	bool init(Graphics *graphics);
 	bool initShader(ShaderIncluder &includer);
 
-	void render(GPUProfiler &profiler, Camera &camera);
+	// true if it did render something, false otherwise
+	bool render(GPUProfiler &profiler, Camera &camera);
 private:
 	struct Vertex
 	{

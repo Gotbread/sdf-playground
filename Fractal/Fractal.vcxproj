@@ -147,6 +147,7 @@
     <ClCompile Include="Graphics.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Math3D.cpp" />
+    <ClCompile Include="Postprocessing.cpp" />
     <ClCompile Include="SceneManager.cpp" />
     <ClCompile Include="SDFRenderer.cpp" />
     <ClCompile Include="ShaderUtil.cpp" />
@@ -160,6 +161,7 @@
     <ClInclude Include="GPUProfiler.h" />
     <ClInclude Include="Graphics.h" />
     <ClInclude Include="Math3D.h" />
+    <ClInclude Include="Postprocessing.h" />
     <ClInclude Include="SceneManager.h" />
     <ClInclude Include="SDFRenderer.h" />
     <ClInclude Include="ShaderUtil.h" />

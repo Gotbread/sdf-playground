@@ -24,7 +24,7 @@ bool Application::Init(HINSTANCE hInstance)
 	RegisterClass(&wc);
 
 	bool fullscreen = true;
-	std::string title = "SDF Fractal";
+	std::string title = "SDF Playground";
 
 	if (fullscreen)
 	{
@@ -37,8 +37,8 @@ bool Application::Init(HINSTANCE hInstance)
 		unsigned windowstyle = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
 		int xpos = CW_USEDEFAULT;
 		int ypos = CW_USEDEFAULT;
-		unsigned width = 1920 / 16;// 800;
-		unsigned height = 1080 / 16; // 600;
+		unsigned width = 800;
+		unsigned height = 600;
 
 		RECT r;
 		SetRect(&r, 0, 0, width, height);
@@ -52,22 +52,6 @@ bool Application::Init(HINSTANCE hInstance)
 	}
 
 	if (!initGraphics())
-	{
-		return false;
-	}
-
-	includer = std::make_unique<ShaderIncluder>();
-	includer->setFolder("shader");
-
-	scene_manager = std::make_unique<SceneManager>();
-	scene_manager->setClient(this);
-	scene_manager->InitClass(hInstance);
-	scene_manager->setShaderFolder("shader");
-	scene_manager->setSceneFolder("scenes");
-	scene_manager->Open(hInstance);
-
-	sdf_renderer = std::make_unique<SDFRenderer>();
-	if (!sdf_renderer->init(graphics.get()))
 	{
 		return false;
 	}
@@ -224,7 +208,7 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 bool Application::initGraphics()
 {
 	graphics = std::make_unique<Graphics>();
-	if (!graphics->init(hWnd))
+	if (!graphics->init(hWnd, false))
 		return false;
 
 	profiler.setGPU(graphics->GetDevice(), graphics->GetContext());
@@ -233,6 +217,28 @@ bool Application::initGraphics()
 	GetClientRect(hWnd, &rect);
 	float width = static_cast<float>(rect.right - rect.left);
 	float height = static_cast<float>(rect.bottom - rect.top);
+
+	includer = std::make_unique<ShaderIncluder>();
+	includer->setFolder("shader");
+
+	scene_manager = std::make_unique<SceneManager>();
+	scene_manager->setClient(this);
+	scene_manager->InitClass(hInstance);
+	scene_manager->setShaderFolder("shader");
+	scene_manager->setSceneFolder("scenes");
+	scene_manager->Open(hInstance);
+
+	sdf_renderer = std::make_unique<SDFRenderer>();
+	if (!sdf_renderer->init(graphics.get()))
+	{
+		return false;
+	}
+
+	hdr = std::make_unique<HDR>();
+	if (!hdr->init(graphics.get(), static_cast<unsigned>(width), static_cast<unsigned>(height)))
+	{
+		return false;
+	}
 
 	camera.SetCameraMode(Camera::CameraModeFPS);
 	camera.SetAspect(width / height);
@@ -250,6 +256,10 @@ bool Application::initGraphics()
 	scroll_pos1 = 1.f;
 	scroll_pos2 = 0.f;
 	scroll_pos3 = 0.f;
+
+	// default scene
+	includer->setSubstitutions({ {"sdf_scene.hlsl", "scenes/sdf_scene_cube.hlsl"} });
+	sdf_renderer->initShader(*includer);
 
 	return true;
 }
@@ -273,11 +283,23 @@ void Application::render()
 
 	profiler.beginFrame();
 
-	ctx->ClearRenderTargetView(graphics->GetMainRendertargetView(), clear_color);
-	ctx->ClearDepthStencilView(graphics->GetMainDepthStencilView(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.f, 0);
+	auto main_rendertarget = graphics->GetMainRendertargetView();
+	auto hdr_rendertarget = hdr->getRenderTarget();
+
+	ctx->OMSetRenderTargets(1, &hdr_rendertarget, nullptr);
+
+	ctx->ClearRenderTargetView(hdr_rendertarget, clear_color);
 	profiler.profile("clear");
 
-	sdf_renderer->render(profiler, camera);
+	if (sdf_renderer->render(profiler, camera))
+	{
+		hdr->process(profiler, main_rendertarget);
+	}
+	else
+	{
+		ctx->OMSetRenderTargets(1, &main_rendertarget, nullptr);
+		ctx->ClearRenderTargetView(main_rendertarget, clear_color);
+	}
 
 	graphics->Present();
 	profiler.profile("present");

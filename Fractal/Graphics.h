@@ -11,7 +11,7 @@ public:
 	Graphics();
 	~Graphics();
 
-	bool init(HWND hWnd);
+	bool init(HWND hWnd, bool create_depth);
 	void Present();
 	void WaitForVBlank();
 
@@ -24,7 +24,7 @@ public:
 private:
 	bool initMonitor();
 	bool initDevice(HWND hWnd);
-	bool initPipeline();
+	bool initPipeline(bool create_depth);
 
 	Comptr<IDXGIFactory> factory;
 	Comptr<IDXGIAdapter> adapter;

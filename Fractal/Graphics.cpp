@@ -14,7 +14,7 @@ Graphics::~Graphics()
 }
 
 
-bool Graphics::init(HWND hWnd)
+bool Graphics::init(HWND hWnd, bool create_depth)
 {
 	if (!initMonitor())
 		return false;
@@ -22,7 +22,7 @@ bool Graphics::init(HWND hWnd)
 	if (!initDevice(hWnd))
 		return false;
 
-	if (!initPipeline())
+	if (!initPipeline(create_depth))
 		return false;
 
 	return true;
@@ -99,14 +99,15 @@ bool Graphics::initDevice(HWND hWnd)
 }
 
 
-bool Graphics::initPipeline()
+bool Graphics::initPipeline(bool create_depth)
 {
 	DXGI_SWAP_CHAIN_DESC swapchaindesc = { 0 };
 	swapchain->GetDesc(&swapchaindesc);
 	HRESULT result;
 
-	D3D11_TEXTURE2D_DESC depthbufferdesc;
+	if (create_depth)
 	{
+		D3D11_TEXTURE2D_DESC depthbufferdesc;
 		Comptr<ID3D11Texture2D> depthstencil;
 
 		depthbufferdesc.Width = swapchaindesc.BufferDesc.Width;
@@ -134,15 +135,18 @@ bool Graphics::initPipeline()
 
 	context->OMSetRenderTargets(1, &rendertargetview, depthstencilview);
 
-	D3D11_DEPTH_STENCIL_DESC depthstencilstate = {};
-	depthstencilstate.DepthEnable = 1;
-	depthstencilstate.DepthFunc = D3D11_COMPARISON_LESS;
-	depthstencilstate.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-	result = device->CreateDepthStencilState(&depthstencilstate, &stencilstate);
-	if (FAILED(result))
-		return false;
+	if (create_depth)
+	{
+		D3D11_DEPTH_STENCIL_DESC depthstencilstate = {};
+		depthstencilstate.DepthEnable = 1;
+		depthstencilstate.DepthFunc = D3D11_COMPARISON_LESS;
+		depthstencilstate.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+		result = device->CreateDepthStencilState(&depthstencilstate, &stencilstate);
+		if (FAILED(result))
+			return false;
 
-	context->OMSetDepthStencilState(stencilstate, 0);
+		context->OMSetDepthStencilState(stencilstate, 0);
+	}
 
 	D3D11_RASTERIZER_DESC rasterdesc;
 	rasterdesc.AntialiasedLineEnable = false;

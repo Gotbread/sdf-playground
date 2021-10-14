@@ -36,7 +36,7 @@ static const float grad_eps = 0.0001f;    // how far to move when computing the 
 static const float shadow_eps = 0.0003f;   // how far to step along the light ray when looking for occluders
 static const float max_dist_check = 1e30; // maximum practical number
 
-static const float3 lighting_dir = normalize(float3(-1.f, -1.f, 1.5f));
+static const float3 lighting_dir = normalize(float3(-1.f, -2.f, 1.5f));
 static const float ambient_lighting_factor = 0.05f;
 
 static const float debug_ruler_scale = 0.01f;
