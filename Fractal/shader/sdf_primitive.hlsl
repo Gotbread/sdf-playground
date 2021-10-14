@@ -172,7 +172,15 @@ float staircase(float x, float stepval, float spread)
 // smooth minimum
 float smin(float a, float b, float k)
 {
-	float h = clamp(0.5f + 0.5f * (b - a) / k, 0.f, 1.f);
+	float h = saturate(0.5f + 0.5f * (b - a) / k);
 	return lerp(b, a, h) - k * h * (1.f - h);
 }
+
+// smooth maximum
+float smax(float a, float b, float k)
+{
+	float h = saturate(0.5f - 0.5f * (b + a) / k);
+	return lerp(b, -a, h) + k * h * (1.f - h);
+}
+
 
