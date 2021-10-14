@@ -23,7 +23,7 @@ bool Application::Init(HINSTANCE hInstance)
 
 	RegisterClass(&wc);
 
-	bool fullscreen = true;
+	bool fullscreen = false;
 	std::string title = "SDF Playground";
 
 	if (fullscreen)
