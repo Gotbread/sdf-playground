@@ -2,7 +2,6 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
-#include <d3dcompiler.h>
 
 #include "Application.h"
 #include "Math3D.h"
@@ -67,6 +66,12 @@ bool Application::Init(HINSTANCE hInstance)
 	scene_manager->setSceneFolder("scenes");
 	scene_manager->Open(hInstance);
 
+	sdf_renderer = std::make_unique<SDFRenderer>();
+	if (!sdf_renderer->init(graphics.get()))
+	{
+		return false;
+	}
+
 	for (auto &elem : keystate)
 	{
 		elem = false;
@@ -87,7 +92,7 @@ void Application::Run()
 
 	// the overflow warning can be ignored. since we are taking the difference only
 	// and a frame wont last more than 49 days (hopefully), we cant overflow
-	DWORD lasttime = GetTickCount();
+	auto lasttime = GetTickCount64();
 
 	MSG Msg;
 	do
@@ -98,8 +103,8 @@ void Application::Run()
 			DispatchMessage(&Msg);
 		}
 
-		unsigned newtime = GetTickCount();
-		unsigned diff = newtime - lasttime;
+		auto newtime = GetTickCount64();
+		unsigned diff = static_cast<unsigned>(newtime - lasttime);
 		lasttime = newtime;
 
 		updateSimulation(static_cast<float>(diff) / 1000.f);
@@ -166,7 +171,7 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 			switch (LOWORD(wParam))
 			{
 			case 'R': // reload shader
-				initShaders();
+				sdf_renderer->initShader(*includer);
 				break;
 			case 'S': // scene manager
 				scene_manager->Open(hInstance);
@@ -222,9 +227,6 @@ bool Application::initGraphics()
 	if (!graphics->init(hWnd))
 		return false;
 
-	if (!initGeometry())
-		return false;
-
 	profiler.setGPU(graphics->GetDevice(), graphics->GetContext());
 
 	RECT rect;
@@ -252,163 +254,6 @@ bool Application::initGraphics()
 	return true;
 }
 
-
-Comptr<ID3DBlob> Application::compileShader(const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings, bool disassemble)
-{
-	std::string code;
-	// first load the file
-	if (!includer->loadFromFile(filename, code))
-	{
-		ErrorBox(Format() << "Could not load file \"" << filename << "\"");
-	}
-
-	// then try to compile it
-	UINT flags =
-#ifdef _DEBUG
-		D3DCOMPILE_DEBUG |
-#endif
-		0;
-
-	Comptr<ID3DBlob> compiled, error;
-	D3DCompile(code.c_str(), code.length(), filename.c_str(), nullptr,  includer.get(), entry.c_str(), profile.c_str(), flags, 0, &compiled, &error);
-	if (error)
-	{
-		if (!compiled) // no code, thus an error
-		{
-			ErrorBox(static_cast<const char *>(error->GetBufferPointer()));
-		}
-		else if (display_warnings) // its a warning, since we got the code
-		{
-			WarningBox(static_cast<const char *>(error->GetBufferPointer()));
-		}
-	}
-
-	if (disassemble && compiled)
-	{
-		UINT disasm_flags = 0;
-		Comptr<ID3DBlob> disassembled;
-		D3DDisassemble(compiled->GetBufferPointer(), compiled->GetBufferSize(), disasm_flags, nullptr, &disassembled);
-		if (disassembled)
-		{
-			std::string output_filename = changeFileExtension(filename, "asm");
-			std::ofstream out_file(output_filename, std::ios::out);
-			out_file.write(static_cast<const char *>(disassembled->GetBufferPointer()), disassembled->GetBufferSize() - 1);
-		}
-	}
-
-	return compiled;
-}
-
-
-bool Application::initShaders()
-{
-	auto context = graphics->GetContext();
-
-	// remove old objects. since d3d keeps a reference internally
-	// the object is not freed yet. setting it to zero ensures
-	// we dont overwrite it later and loose the pointer.
-	// once we set the new objects in the pipeline, the old ones will get released anyway
-	v_shader = nullptr;
-	p_shader = nullptr;
-	input_layout = nullptr;
-
-	UINT flags =
-#ifdef _DEBUG
-		D3DCOMPILE_DEBUG |
-#endif
-		0;
-
-	Comptr<ID3DBlob> v_compiled = compileShader("vshader.hlsl", "vs_5_0", "vs_main");
-	if (!v_compiled)
-		return false;
-
-	Comptr<ID3DBlob> p_compiled = compileShader("pshader.hlsl", "ps_5_0", "ps_main");
-	if (!p_compiled)
-		return false;
-
-	auto device = graphics->GetDevice();
-	HRESULT hr = device->CreateVertexShader(v_compiled->GetBufferPointer(), v_compiled->GetBufferSize(), 0, &v_shader);
-	if (FAILED(hr))
-		return false;
-
-	hr = device->CreatePixelShader(p_compiled->GetBufferPointer(), p_compiled->GetBufferSize(), 0, &p_shader);
-	if (FAILED(hr))
-		return false;
-	
-	context->VSSetShader(v_shader, nullptr, 0);
-	context->PSSetShader(p_shader, nullptr, 0);
-
-	// build the input assembler
-	D3D11_INPUT_ELEMENT_DESC input_desc[] =
-	{
-		{"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
-	};
-
-	hr = device->CreateInputLayout(input_desc, static_cast<UINT>(std::size(input_desc)), v_compiled->GetBufferPointer(), v_compiled->GetBufferSize(), &input_layout);
-	if (FAILED(hr))
-		return false;
-
-	context->IASetInputLayout(input_layout);
-
-	return true;
-}
-
-
-bool Application::initGeometry()
-{
-	auto device = graphics->GetDevice();
-	
-	Vertex vertices[4] =
-	{
-		{-1.f, +1.f},
-		{+1.f, +1.f},
-		{-1.f, -1.f},
-		{+1.f, -1.f},
-	};
-
-	D3D11_BUFFER_DESC vertex_buffer_desc = { 0 };
-	vertex_buffer_desc.StructureByteStride = sizeof(Vertex);
-	vertex_buffer_desc.ByteWidth = static_cast<UINT>(sizeof(Vertex) * std::size(vertices));
-	vertex_buffer_desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	vertex_buffer_desc.Usage = D3D11_USAGE_DEFAULT;
-
-	D3D11_SUBRESOURCE_DATA vertex_init_data = { 0 };
-	vertex_init_data.pSysMem = vertices;
-	HRESULT hr = device->CreateBuffer(&vertex_buffer_desc, &vertex_init_data, &vertex_buffer);
-	if (FAILED(hr))
-		return false;
-
-	using Index = unsigned short;
-	Index indices[] =
-	{
-		0, 1, 2, 2, 1, 3,
-	};
-
-	D3D11_BUFFER_DESC index_buffer_desc = { 0 };
-	index_buffer_desc.StructureByteStride = sizeof(Index);
-	index_buffer_desc.ByteWidth = static_cast<UINT>(sizeof(Index) * std::size(indices));
-	index_buffer_desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-	index_buffer_desc.Usage = D3D11_USAGE_DEFAULT;
-
-	D3D11_SUBRESOURCE_DATA index_init_data = { 0 };
-	index_init_data.pSysMem = indices;
-	hr = device->CreateBuffer(&index_buffer_desc, &index_init_data, &index_buffer);
-	if (FAILED(hr))
-		return false;
-
-	D3D11_BUFFER_DESC cbuffer_desc = { 0 };
-	cbuffer_desc.ByteWidth = sizeof(camera_cbuffer);
-	cbuffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	cbuffer_desc.Usage = D3D11_USAGE_DYNAMIC;
-	cbuffer_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	hr = device->CreateBuffer(&cbuffer_desc, nullptr, &camera_buffer);
-	if (FAILED(hr))
-		return false;
-
-	return true;
-}
-
-
 void Application::render()
 {
 	if (profiler.fetchResults())
@@ -427,67 +272,12 @@ void Application::render()
 	auto ctx = graphics->GetContext();
 
 	profiler.beginFrame();
+
 	ctx->ClearRenderTargetView(graphics->GetMainRendertargetView(), clear_color);
 	ctx->ClearDepthStencilView(graphics->GetMainDepthStencilView(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.f, 0);
 	profiler.profile("clear");
 
-	// only render something if the shader step was successful, else show a blank screen
-	if (v_shader && p_shader && input_layout)
-	{
-		D3D11_MAPPED_SUBRESOURCE sub;
-		ctx->Map(camera_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &sub);
-		camera_cbuffer *cam_buf = static_cast<camera_cbuffer *>(sub.pData);
-		cam_buf->eye = camera.GetEye();
-		cam_buf->front_vec = camera.GetDirection();
-		cam_buf->right_vec = (camera.GetFrustrumEdge(0) - camera.GetFrustrumEdge(3)) * 0.5f;
-		cam_buf->top_vec = (camera.GetFrustrumEdge(0) - camera.GetFrustrumEdge(1)) * 0.5f;
-		
-		if (show_debug_plane)
-		{
-			if (scroll_pos1 > 0.f)
-			{
-				cam_buf->debug_plane_normal = Math3D::Matrix4x4::RotationXMatrix(scroll_pos1 * Math3D::PI * +0.5f) * Math3D::Vector3(0.f, 1.f, 0.f);
-			}
-			else
-			{
-				cam_buf->debug_plane_normal = Math3D::Matrix4x4::RotationZMatrix(scroll_pos1 * Math3D::PI * -0.5f) * Math3D::Vector3(0.f, 1.f, 0.f);
-			}
-		}
-		else
-		{
-			cam_buf->debug_plane_normal = Math3D::Vector3::NullVector();
-		}
-		cam_buf->debug_plane_point = cam_buf->debug_plane_normal * scroll_pos2;
-
-		cam_buf->params.stime = stime;
-		cam_buf->params.free_param = scroll_pos3;
-
-		ctx->Unmap(camera_buffer, 0);
-		ctx->PSSetConstantBuffers(0, 1, &camera_buffer);
-
-		UINT v_strides[] =
-		{
-			sizeof(Vertex),
-		};
-		UINT v_offsets[] =
-		{
-			0,
-		};
-		ID3D11Buffer *vertex_buffers[] =
-		{
-			vertex_buffer,
-		};
-		ctx->IASetVertexBuffers(0, 1, vertex_buffers, v_strides, v_offsets);
-		ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-		ctx->IASetIndexBuffer(index_buffer, DXGI_FORMAT_R16_UINT, 0);
-
-		profiler.profile("setup");
-
-		ctx->DrawIndexed(6, 0, 0);
-
-		profiler.profile("draw");
-	}
+	sdf_renderer->render(profiler, camera);
 
 	graphics->Present();
 	profiler.profile("present");
@@ -537,5 +327,5 @@ void Application::updateSimulation(float dt)
 void Application::loadScene(const std::filesystem::path &filename)
 {
 	includer->setSubstitutions({ {"sdf_scene.hlsl", filename.string()} });
-	initShaders();
+	sdf_renderer->initShader(*includer);
 }

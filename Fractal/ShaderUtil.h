@@ -1,9 +1,12 @@
 #pragma once
 
+#include "Comptr.h"
+
 #include <d3dcommon.h>
 #include <string>
 #include <vector>
 #include <filesystem>
+
 
 class ShaderIncluder : public ID3DInclude
 {
@@ -22,3 +25,5 @@ private:
 	std::filesystem::path folder;
 	std::vector<Substitution> substitutions;
 };
+
+Comptr<ID3DBlob> compileShader(ShaderIncluder &includer, const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings = true, bool disassemble = false);

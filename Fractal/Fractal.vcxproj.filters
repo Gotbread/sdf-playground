@@ -39,13 +39,16 @@
     <ClCompile Include="GPUProfiler.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
-    <ClCompile Include="ShaderIncluder.cpp">
+    <ClCompile Include="ShaderUtil.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
     <ClCompile Include="SceneManager.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
     <ClCompile Include="WinUtil.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
+    <ClCompile Include="SDFRenderer.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
   </ItemGroup>
@@ -74,10 +77,13 @@
     <ClInclude Include="SceneManager.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
-    <ClInclude Include="ShaderIncluder.h">
+    <ClInclude Include="ShaderUtil.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
     <ClInclude Include="WinUtil.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="SDFRenderer.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
   </ItemGroup>

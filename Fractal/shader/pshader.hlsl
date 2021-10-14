@@ -282,4 +282,8 @@ void ps_main(ps_input input, out ps_output output)
 	}
 
 	output.color = col;
+
+	//float x = input.screenpos.x * 0.5f + 0.5f;
+	//float greyscale = floor(x * 10.f) / 9.f;
+	//output.color = greyscale;
 }

@@ -148,7 +148,8 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Math3D.cpp" />
     <ClCompile Include="SceneManager.cpp" />
-    <ClCompile Include="ShaderIncluder.cpp" />
+    <ClCompile Include="SDFRenderer.cpp" />
+    <ClCompile Include="ShaderUtil.cpp" />
     <ClCompile Include="Util.cpp" />
     <ClCompile Include="WinUtil.cpp" />
   </ItemGroup>
@@ -160,7 +161,8 @@
     <ClInclude Include="Graphics.h" />
     <ClInclude Include="Math3D.h" />
     <ClInclude Include="SceneManager.h" />
-    <ClInclude Include="ShaderIncluder.h" />
+    <ClInclude Include="SDFRenderer.h" />
+    <ClInclude Include="ShaderUtil.h" />
     <ClInclude Include="Util.h" />
     <ClInclude Include="WinUtil.h" />
   </ItemGroup>
