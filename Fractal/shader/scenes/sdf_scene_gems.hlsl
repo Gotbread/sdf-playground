@@ -1,6 +1,6 @@
 #include "sdf_primitive.hlsl"
 
-float smax(float d1, float d2, float k)
+float smax2(float d1, float d2, float k)
 {
     float h = clamp(0.5 - 0.5 * (d2 - d1) / k, 0.0, 1.0);
     return lerp(d2, d1, h) + k * h * (1.0 - h);
@@ -30,7 +30,7 @@ float2 map(float4 pos, float3 dir, out float3 material_property)
     float plane1 = sdPlane(obj_pos.xyz - float3(0.1f, 0.1f, 0.f), float3(0.707f, 0.707f, 0.f));
     float plane2 = sdPlane(obj_pos.xyz, float3(0.707f, -0.707f, 0.f));
     float plane3 = sdPlane(obj_pos.xyz - float3(0.f, 0.13f, 0.f), float3(0.f, 1.f, 0.f));
-    float obj = smax(smax(plane1, plane2, 0.001f), plane3, 0.001f);
+    float obj = smax2(smax2(plane1, plane2, 0.001f), plane3, 0.001f);
 
     // floor
     float floor1 = sdPlaneFast(pos.xyz, dir, float3(0.f, 1.f, 0.f));
