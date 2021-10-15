@@ -127,7 +127,7 @@ void HDR::process(GPUProfiler &profiler, ID3D11RenderTargetView *ldr_view)
 	auto ctx = graphics->GetContext();
 
 	ID3D11UnorderedAccessView *null_uav = nullptr;
-	ID3D11ShaderResourceView *null_view = nullptr;
+	ID3D11ShaderResourceView *null_view[] = { nullptr, nullptr };
 
 	unsigned cs_group_size = 128;
 	// set the render target first so our own render target is not bound
@@ -141,7 +141,7 @@ void HDR::process(GPUProfiler &profiler, ID3D11RenderTargetView *ldr_view)
 	ctx->Dispatch((width + cs_group_size - 1) / cs_group_size, height, 1);
 	profiler.profile("Bloom 1");
 
-	ctx->CSSetShaderResources(0, 1, &null_view);
+	ctx->CSSetShaderResources(0, 1, null_view);
 	ctx->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
 
 	// second bloom pass
@@ -152,7 +152,7 @@ void HDR::process(GPUProfiler &profiler, ID3D11RenderTargetView *ldr_view)
 	ctx->Dispatch(width, (height + cs_group_size - 1) / cs_group_size, 1);
 	profiler.profile("Bloom 2");
 
-	ctx->CSSetShaderResources(0, 1, &null_view);
+	ctx->CSSetShaderResources(0, 1, null_view);
 	ctx->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
 
 	// hdr pass
@@ -165,5 +165,5 @@ void HDR::process(GPUProfiler &profiler, ID3D11RenderTargetView *ldr_view)
 	ctx->DrawIndexed(6, 0, 0);
 	profiler.profile("HDR");
 
-	ctx->PSSetShaderResources(0, 1, &null_view);
+	ctx->PSSetShaderResources(0, 2, null_view);
 }
