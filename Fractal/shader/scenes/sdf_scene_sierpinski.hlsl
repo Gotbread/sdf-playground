@@ -1,4 +1,4 @@
-#include "sdf_primitive.hlsl"
+#include "sdf_primitives.hlsl"
 
 float sierpinski(float3 p, uint depth)
 {

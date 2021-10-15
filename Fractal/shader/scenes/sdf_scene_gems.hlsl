@@ -1,10 +1,5 @@
-#include "sdf_primitive.hlsl"
-
-float smax2(float d1, float d2, float k)
-{
-    float h = clamp(0.5 - 0.5 * (d2 - d1) / k, 0.0, 1.0);
-    return lerp(d2, d1, h) + k * h * (1.0 - h);
-}
+#include "sdf_primitives.hlsl"
+#include "sdf_ops.hlsl"
 
 // params:
 // pos.xyz: 3D position in the scene

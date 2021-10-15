@@ -1,5 +1,5 @@
-#include "sdf_primitive.hlsl"
-
+#include "sdf_primitives.hlsl"
+#include "sdf_ops.hlsl"
 
 float vase(float3 pos)
 {

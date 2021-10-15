@@ -1,4 +1,4 @@
-#include "sdf_primitive.hlsl"
+#include "sdf_primitives.hlsl"
 
 
 // changes the entries around so x is biggest, then y, then z

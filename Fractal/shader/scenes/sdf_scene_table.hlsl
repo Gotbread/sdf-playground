@@ -1,5 +1,5 @@
-#include "sdf_primitive.hlsl"
-
+#include "sdf_primitives.hlsl"
+#include "sdf_ops.hlsl"
 
 static const float leg_width = 0.05f;
 static const float leg_height = 0.7f;
