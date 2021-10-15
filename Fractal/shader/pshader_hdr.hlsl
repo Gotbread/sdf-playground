@@ -22,5 +22,6 @@ void ps_main(ps_input input, out ps_output output)
 	float4 total_color = scene_color + bloom_color;
 	//output.color = total_color / (1.f + total_color);
 	float exposure = 1.f;
-	output.color = 1.f - exp(-total_color * exposure);
+	float4 ldr_color = 1.f - exp(-total_color * exposure);
+	output.color = lerp(scene_color, ldr_color, scene_color.a);
 }
