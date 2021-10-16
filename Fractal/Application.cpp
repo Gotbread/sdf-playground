@@ -326,10 +326,10 @@ void Application::render()
 	graphics.WaitForVBlank();
 }
 
-
 void Application::updateSimulation(float dt)
 {
 	stime += dt;
+	float speed = 2.f;
 
 	Vector3 move = Vector3::NullVector();
 	if (keystate['W'])
@@ -358,10 +358,10 @@ void Application::updateSimulation(float dt)
 	}
 	if (keystate[VK_SHIFT])
 	{
-		move *= 3.0f;
+		speed = 5.f;
 	}
 
-	camera.MoveRel(move * dt);
+	camera.MoveRel(move * speed * dt);
 }
 
 void Application::loadScene(const std::filesystem::path &filename)
