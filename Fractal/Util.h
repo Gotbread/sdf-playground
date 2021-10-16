@@ -1,9 +1,10 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <fstream>
 #include <sstream>
-
+#include <vector>
 
 class Format
 {
@@ -26,6 +27,10 @@ public:
 	{
 		update_cache();
 		return str_cache.c_str();
+	}
+	std::stringstream &get_stream()
+	{
+		return stream;
 	}
 private:
 	void invalidate_cache()
@@ -54,8 +59,10 @@ void set_array(T (&arr)[N], const T &setval)
 	}
 }
 
+std::string_view removeSpaces(std::string_view input);
+std::pair<std::vector<std::string_view>, std::vector<std::string_view>> splitString(std::string_view input, std::string_view pattern_start, std::string_view pattern_end = {});
 
 std::string readFromFile(std::ifstream &file);
 void ErrorBox(const std::string &msg);
 void WarningBox(const std::string &msg);
-std::string changeFileExtension(const std::string &filename, const std::string &new_extension);
+std::string changeFileExtension(std::string_view filename, std::string_view new_extension);
