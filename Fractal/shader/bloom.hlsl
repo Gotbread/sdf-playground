@@ -19,8 +19,8 @@ void cs_main1(uint3 dispatch_thread_id : SV_DispatchThreadID)
 	{
 		float4 col = scene_input[dispatch_thread_id.xy + int2(2 * i, 0)];
 		float brightness = dot(col.xyz, brightness_fac);
-		if (brightness < 1.f)
-			col = 0.f;
+		float factor = saturate((saturate(brightness) - 0.75f) * 4.f);
+		col *= factor;
 		sum += col * coeffs[abs(i)];
 	}
 	output[dispatch_thread_id.xy] = sum * 2.f;
