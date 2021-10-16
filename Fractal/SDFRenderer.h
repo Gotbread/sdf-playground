@@ -2,6 +2,7 @@
 
 #include "Comptr.h"
 #include "Math3D.h"
+#include "ShaderUtil.h"
 
 #include <d3d11.h>
 
@@ -10,6 +11,7 @@ class Camera;
 class GPUProfiler;
 class ShaderIncluder;
 class FullscreenQuad;
+class ShaderVariableManager;
 
 class SDFRenderer
 {
@@ -45,6 +47,8 @@ private:
 
 	Comptr<ID3D11Buffer> camera_buffer;
 	Comptr<ID3D11PixelShader> p_shader;
+
+	ShaderVariableManager var_manager;
 
 	DebugPlane debug_plane;
 	float stime = 0.f;

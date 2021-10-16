@@ -32,11 +32,19 @@ bool SDFRenderer::initShader(ShaderIncluder &includer)
 	// once we set the new objects in the pipeline, the old ones will get released anyway
 	p_shader = nullptr;
 
+	var_manager.setSlot(1);
+	var_manager.getVariables().clear();
+	includer.setShaderVariableManager(&var_manager);
 	Comptr<ID3DBlob> p_compiled = compileShader(includer, "pshader_sdf.hlsl", "ps_5_0", "ps_main");
 	if (!p_compiled)
 		return false;
 
+	includer.setShaderVariableManager(nullptr);
+
 	auto device = graphics->GetDevice();
+	if (var_manager.hasVariables() && !var_manager.createConstantBuffer(device))
+		return false;
+
 	HRESULT hr = device->CreatePixelShader(p_compiled->GetBufferPointer(), p_compiled->GetBufferSize(), 0, &p_shader);
 	if (FAILED(hr))
 		return false;
@@ -60,6 +68,16 @@ bool SDFRenderer::render(FullscreenQuad &quad, GPUProfiler &profiler, Camera &ca
 		return false;
 	}
 
+	if (var_manager.hasVariables())
+	{
+		var_manager.updateBuffer(ctx);
+	}
+
+	ID3D11Buffer *constant_buffers[2] =
+	{
+		camera_buffer, var_manager.getBuffer()
+	};
+
 	D3D11_MAPPED_SUBRESOURCE sub;
 	ctx->Map(camera_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &sub);
 	camera_cbuffer *cam_buf = static_cast<camera_cbuffer *>(sub.pData);
@@ -75,7 +93,7 @@ bool SDFRenderer::render(FullscreenQuad &quad, GPUProfiler &profiler, Camera &ca
 	cam_buf->params.stime = stime;
 
 	ctx->Unmap(camera_buffer, 0);
-	ctx->PSSetConstantBuffers(0, 1, &camera_buffer);
+	ctx->PSSetConstantBuffers(0, 2, constant_buffers);
 
 	ctx->PSSetShader(p_shader, nullptr, 0);
 

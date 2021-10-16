@@ -1,5 +1,5 @@
 #include "sdf_primitives.hlsl"
-
+#include "user_variables.hlsl"
 
 // params:
 // pos.xyz: 3D position in the scene
@@ -15,7 +15,7 @@
 // extra vector, meaning depends on material
 float2 map(float4 pos, float3 dir, out float3 material_property)
 {
-	float obj = sdBox(pos.xyz - float3(0.f, 1.f, 0.f), 0.5f);
+	float obj = sdBox(pos.xyz - float3(0.f, 1.f, 0.f), VAR_size(min=0.2, max=2, start=1, step=0.2));
 
 	// floor
 	float floor1 = sdPlaneFast(pos.xyz, dir, float3(0.f, 1.f, 0.f));

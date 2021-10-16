@@ -4,7 +4,6 @@
 
 #include "Comptr.h"
 
-
 class Graphics
 {
 public:

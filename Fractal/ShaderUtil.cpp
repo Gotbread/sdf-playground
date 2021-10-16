@@ -3,7 +3,8 @@
 
 #include <fstream>
 #include <d3dcompiler.h>
-
+#include <string_view>
+#include <algorithm>
 
 void ShaderIncluder::setFolder(const std::string &folder)
 {
@@ -18,6 +19,11 @@ void ShaderIncluder::setSubstitutions(std::vector<ShaderIncluder::Substitution> 
 void ShaderIncluder::setExtraHeaders(std::vector<MemoryHeader> headers)
 {
 	this->headers.swap(headers);
+}
+
+void ShaderIncluder::setShaderVariableManager(ShaderVariableManager *var_manager)
+{
+	this->var_manager = var_manager;
 }
 
 HRESULT STDMETHODCALLTYPE ShaderIncluder::Open(D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID *ppData, UINT *pBytes)
@@ -46,11 +52,11 @@ HRESULT STDMETHODCALLTYPE ShaderIncluder::Close(LPCVOID pData)
 bool ShaderIncluder::loadFromFile(const std::string &filename, std::string &code)
 {
 	// do we have this header preloaded?
-	for (auto &header : headers)
+	for (const auto &[header_filename, header_code] : headers)
 	{
-		if (header.first == filename)
+		if (header_filename == filename)
 		{
-			code = header.second;
+			code = header_code;
 			return true;
 		}
 	}
@@ -58,11 +64,11 @@ bool ShaderIncluder::loadFromFile(const std::string &filename, std::string &code
 	// else load it from file. but which file?
 	// a subtituted one?
 	const std::string *final_filename = &filename;
-	for (auto &sub : substitutions)
+	for (const auto &[old_filename, new_filename] : substitutions)
 	{
-		if (sub.first == filename)
+		if (old_filename == filename)
 		{
-			final_filename = &sub.second;
+			final_filename = &new_filename;
 			break;
 		}
 	}
@@ -74,9 +80,150 @@ bool ShaderIncluder::loadFromFile(const std::string &filename, std::string &code
 	}
 
 	code = readFromFile(file);
+
+	if (var_manager)
+	{
+		std::string new_code;
+		var_manager->parseFile(code, new_code);
+		code.swap(new_code);
+
+		std::string header = var_manager->generateHeader();
+		setExtraHeaders({ { "user_variables.hlsl", header } });
+	}
+
 	return true;
 }
 
+void ShaderVariableManager::setSlot(unsigned slot)
+{
+	this->slot = slot;
+}
+
+bool ShaderVariableManager::parseFile(const std::string &input, std::string &output)
+{
+	std::string var_tag = "VAR_";
+	auto [code_blocks, variable_blocks] = splitString(input, var_tag, ")");
+
+	output.clear();
+	output.reserve(input.size());
+	for (auto code_iter = code_blocks.begin(), variable_iter = variable_blocks.begin(); variable_iter != variable_blocks.end(); ++code_iter, ++variable_iter)
+	{
+		// extract the name
+		auto bracket_begin = variable_iter->find("(");
+		auto bracket_end = variable_iter->find(")");
+
+		auto var_name = variable_iter->substr(0, bracket_begin);
+		auto param_string = variable_iter->substr(bracket_begin + 1, bracket_end - bracket_begin - 1);
+
+		output += *code_iter;
+		output += var_name;
+
+		// build the param map
+		auto [params, _] = splitString(param_string, ",");
+		std::map<std::string, float> param_map;
+		for (const auto &param : params)
+		{
+			auto [parts, _] = splitString(param, "=");
+			if (parts.size() != 2)
+			{
+				return false;
+			}
+
+			auto name_str = removeSpaces(parts[0]);
+			auto val_str = removeSpaces(parts[1]);
+			param_map[std::string(name_str)] = std::stof(std::string(val_str));
+		}
+
+		// add the variable
+		Variable var;
+		auto iter = param_map.find("min");
+		var.minval = iter != param_map.end() ? iter->second : 0.f;
+		iter = param_map.find("max");
+		var.maxval = iter != param_map.end() ? iter->second : 2.f;
+		iter = param_map.find("start");
+		var.start = iter != param_map.end() ? iter->second : (var.maxval + var.minval) * 0.5f;
+		iter = param_map.find("step");
+		var.step = iter != param_map.end() ? iter->second : (var.maxval - var.minval) * 0.05f;
+		var.value = var.start;
+
+		variables[std::string(var_name)] = var;
+	}
+	output += code_blocks.back();
+	return true;
+}
+
+std::string ShaderVariableManager::generateHeader() const
+{
+	Format formatter;
+	formatter <<
+		"cbuffer user_variables : register(b" << slot << ")\n"
+		"{\n"
+		"	float ";
+	for (bool comma = false; auto &[name, var] : variables)
+	{
+		formatter << name;
+		if (comma)
+		{
+			formatter << ", ";
+		}
+		comma = true;
+	}
+	formatter << ";\n";
+	formatter <<
+		"};\n";
+
+	return formatter;
+}
+
+bool ShaderVariableManager::hasVariables() const
+{
+	return !variables.empty();
+}
+
+std::map<std::string, ShaderVariableManager::Variable> &ShaderVariableManager::getVariables()
+{
+	return variables;
+}
+
+void ShaderVariableManager::setValue(const std::string &name, float val)
+{
+	if (auto iter = variables.find(name); iter != variables.end())
+	{
+		iter->second.value = val;
+	}	
+}
+
+bool ShaderVariableManager::createConstantBuffer(ID3D11Device *dev)
+{
+	size_t byte_size = sizeof(float) * static_cast<unsigned>(variables.size());
+	D3D11_BUFFER_DESC cbuffer_desc = { 0 };
+	cbuffer_desc.ByteWidth = (byte_size + 15) & ~15;
+	cbuffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	cbuffer_desc.Usage = D3D11_USAGE_DYNAMIC;
+	cbuffer_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	HRESULT hr = dev->CreateBuffer(&cbuffer_desc, nullptr, &cbuffer);
+	if (FAILED(hr))
+		return false;
+
+	return true;
+}
+
+void ShaderVariableManager::updateBuffer(ID3D11DeviceContext *ctx)
+{
+	D3D11_MAPPED_SUBRESOURCE res;
+	ctx->Map(cbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &res);
+	float *ptr = static_cast<float *>(res.pData);
+	for (auto &elem : variables)
+	{
+		*ptr++ = elem.second.value;
+	}
+	ctx->Unmap(cbuffer, 0);
+}
+
+ID3D11Buffer *ShaderVariableManager::getBuffer()
+{
+	return cbuffer;
+}
 
 Comptr<ID3DBlob> compileShader(ShaderIncluder &includer, const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings, bool disassemble)
 {
@@ -107,6 +254,9 @@ Comptr<ID3DBlob> compileShader(ShaderIncluder &includer, const std::string &file
 			WarningBox(static_cast<const char *>(error->GetBufferPointer()));
 		}
 	}
+
+	// remove headers again
+	includer.setExtraHeaders({});
 
 	if (disassemble && compiled)
 	{
