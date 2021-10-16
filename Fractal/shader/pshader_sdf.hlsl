@@ -12,7 +12,7 @@ struct ps_output
 	float4 color : SV_TARGET;
 };
 
-cbuffer camera
+cbuffer camera : register(b0)
 {
 	float3 eye;
 	float3 front_vec;
@@ -24,7 +24,7 @@ cbuffer camera
 
 	float _unused;
 	float stime;
-	float free_param;
+	float debug_ruler_scale;
 };
 
 
@@ -35,9 +35,6 @@ static const float max_dist_check = 1e30; // maximum practical number
 
 static const float3 lighting_dir = normalize(float3(-1.f, -2.f, 1.5f));
 static const float ambient_lighting_factor = 0.05f;
-
-static const float debug_ruler_scale = 0.01f;
-
 
 // include the scene here so it has access to all constants
 #include "sdf_scene.hlsl"
@@ -62,6 +59,7 @@ float2 map_debug(float3 p, float3 dir, out float3 material_property)
 	float2 distance_scene = map(float4(p, 1.f), dir, material_property);
 	if (dot(debug_plane_normal, debug_plane_normal) > 0.5f && distance_cut_plane < distance_scene.x)
 	{
+		distance_scene = map(float4(p, 0.f), float3(0.f, 0.f, 0.f), material_property);
 		material_property = debug_plane_color(distance_scene.x);
 		return float2(distance_cut_plane, 0.f);
 	}
