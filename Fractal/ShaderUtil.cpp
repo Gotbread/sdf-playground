@@ -15,6 +15,11 @@ void ShaderIncluder::setSubstitutions(std::vector<ShaderIncluder::Substitution> 
 	this->substitutions.swap(substitutions);
 }
 
+void ShaderIncluder::setExtraHeaders(std::vector<MemoryHeader> headers)
+{
+	this->headers.swap(headers);
+}
+
 HRESULT STDMETHODCALLTYPE ShaderIncluder::Open(D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID *ppData, UINT *pBytes)
 {
 	std::string code;
@@ -23,7 +28,7 @@ HRESULT STDMETHODCALLTYPE ShaderIncluder::Open(D3D_INCLUDE_TYPE IncludeType, LPC
 		return D3D11_ERROR_FILE_NOT_FOUND; // let D3D deal with the error
 	}
 
-	UINT size = code.size();
+	UINT size = static_cast<UINT>(code.size());
 	char *data = new char[size];
 	memcpy(data, code.c_str(), size);
 	*ppData = data;
@@ -40,6 +45,18 @@ HRESULT STDMETHODCALLTYPE ShaderIncluder::Close(LPCVOID pData)
 
 bool ShaderIncluder::loadFromFile(const std::string &filename, std::string &code)
 {
+	// do we have this header preloaded?
+	for (auto &header : headers)
+	{
+		if (header.first == filename)
+		{
+			code = header.second;
+			return true;
+		}
+	}
+
+	// else load it from file. but which file?
+	// a subtituted one?
 	const std::string *final_filename = &filename;
 	for (auto &sub : substitutions)
 	{

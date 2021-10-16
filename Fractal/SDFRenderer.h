@@ -9,21 +9,27 @@ class Graphics;
 class Camera;
 class GPUProfiler;
 class ShaderIncluder;
+class FullscreenQuad;
 
 class SDFRenderer
 {
 public:
-	bool init(Graphics *graphics);
-	bool initShader(ShaderIncluder &includer);
-
-	// true if it did render something, false otherwise
-	bool render(GPUProfiler &profiler, Camera &camera);
-private:
-	struct Vertex
+	// extra plane which shows the distance field
+	struct DebugPlane
 	{
-		float x, y;
+		bool show = false;
+		float ruler_scale = 1.f;
+		Math3D::Vector3 point, normal;
 	};
 
+	bool init(Graphics &graphics);
+	bool initShader(ShaderIncluder &includer);
+
+	void setParameters(const DebugPlane &debug_plane, float stime);
+
+	// true if it did render something, false otherwise
+	bool render(FullscreenQuad &quad, GPUProfiler &profiler, Camera &camera);
+private:
 	struct camera_cbuffer
 	{
 		alignas(16) Math3D::Vector3 eye;
@@ -31,16 +37,15 @@ private:
 		alignas(16) Math3D::Vector3 debug_plane_point, debug_plane_normal;
 		alignas(16) struct
 		{
-			float stime, free_param;
+			float stime, debug_plane_scale;
 		} params;
 	};
 
-	bool initGeometry();
-
 	Graphics *graphics = nullptr;
 
-	Comptr<ID3D11Buffer> vertex_buffer, index_buffer, camera_buffer;
-	Comptr<ID3D11VertexShader> v_shader;
+	Comptr<ID3D11Buffer> camera_buffer;
 	Comptr<ID3D11PixelShader> p_shader;
-	Comptr<ID3D11InputLayout> input_layout;
+
+	DebugPlane debug_plane;
+	float stime = 0.f;
 };

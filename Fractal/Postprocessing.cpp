@@ -2,15 +2,15 @@
 #include "Graphics.h"
 #include "ShaderUtil.h"
 #include "GPUProfiler.h"
+#include "FullscreenQuad.h"
 
-
-bool HDR::init(Graphics *graphics, unsigned width, unsigned height)
+bool HDR::init(Graphics &graphics, unsigned width, unsigned height)
 {
-	this->graphics = graphics;
+	this->graphics = &graphics;
 	this->width = width;
 	this->height = height;
 
-	auto dev = graphics->GetDevice();
+	auto dev = graphics.GetDevice();
 
 	D3D11_TEXTURE2D_DESC texture_desc;
 
@@ -83,13 +83,18 @@ bool HDR::init(Graphics *graphics, unsigned width, unsigned height)
 	if (FAILED(result))
 		return false;
 
-	ShaderIncluder includer;
-	includer.setFolder("shader");
+	return true;
+}
+
+bool HDR::initShader(ShaderIncluder &includer)
+{
+	auto dev = graphics->GetDevice();
+
 	Comptr<ID3DBlob> p_compiled = compileShader(includer, "pshader_hdr.hlsl", "ps_5_0", "ps_main");
 	if (!p_compiled)
 		return false;
 
-	result = dev->CreatePixelShader(p_compiled->GetBufferPointer(), p_compiled->GetBufferSize(), 0, &hdr_shader);
+	HRESULT result = dev->CreatePixelShader(p_compiled->GetBufferPointer(), p_compiled->GetBufferSize(), 0, &hdr_shader);
 	if (FAILED(result))
 		return false;
 
@@ -122,7 +127,7 @@ ID3D11ShaderResourceView *HDR::getShaderView()
 	return shader_view;
 }
 
-void HDR::process(GPUProfiler &profiler, ID3D11RenderTargetView *ldr_view)
+void HDR::process(FullscreenQuad &fullscreen_quad, GPUProfiler &profiler, ID3D11RenderTargetView *ldr_view)
 {
 	auto ctx = graphics->GetContext();
 
@@ -162,7 +167,7 @@ void HDR::process(GPUProfiler &profiler, ID3D11RenderTargetView *ldr_view)
 	ctx->PSSetShader(hdr_shader, 0, 0);
 	ctx->PSSetSamplers(0, 1, &sampler);
 
-	ctx->DrawIndexed(6, 0, 0);
+	fullscreen_quad.render();
 	profiler.profile("HDR");
 
 	ctx->PSSetShaderResources(0, 2, null_view);

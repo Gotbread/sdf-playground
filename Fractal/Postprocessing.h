@@ -1,23 +1,26 @@
 #pragma once
 
-
 #include "Comptr.h"
 
 #include <d3d11.h>
 
 class Graphics;
 class GPUProfiler;
+class FullscreenQuad;
+class ShaderIncluder;
 
 class HDR
 {
 public:
-	bool init(Graphics *graphics, unsigned width, unsigned height);
+	bool init(Graphics &graphics, unsigned width, unsigned height);
+	bool initShader(ShaderIncluder &includer);
 
 	ID3D11RenderTargetView *getRenderTarget();
 	ID3D11ShaderResourceView *getShaderView();
-	void process(GPUProfiler &profiler, ID3D11RenderTargetView *ldr_view);
+
+	void process(FullscreenQuad &quad, GPUProfiler &profiler, ID3D11RenderTargetView *ldr_view);
 private:
-	Graphics *graphics;
+	Graphics *graphics = nullptr;
 
 	Comptr<ID3D11Texture2D> rendertarget;
 	Comptr<ID3D11RenderTargetView> rendertarget_view;
@@ -36,5 +39,5 @@ private:
 
 	Comptr<ID3D11ComputeShader> bloom1_shader, bloom2_shader;
 
-	unsigned width, height;
+	unsigned width = 0, height = 0;
 };

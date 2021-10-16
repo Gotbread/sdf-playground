@@ -11,7 +11,6 @@
 
 using namespace Math3D;
 
-
 bool Application::Init(HINSTANCE hInstance)
 {
 	WNDCLASS wc = { 0 };
@@ -56,19 +55,12 @@ bool Application::Init(HINSTANCE hInstance)
 		return false;
 	}
 
-	for (auto &elem : keystate)
-	{
-		elem = false;
-	}
-	for (auto &elem : mouse_state)
-	{
-		elem = false;
-	}
+	set_array(keystate, false);
+	set_array(mouse_state, false);
 	show_debug_plane = false;
 
 	return true;
 }
-
 
 void Application::Run()
 {
@@ -97,7 +89,6 @@ void Application::Run()
 	while (Msg.message != WM_QUIT);
 }
 
-
 LRESULT CALLBACK Application::sWndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 {
 	if (Msg == WM_NCCREATE)
@@ -111,7 +102,6 @@ LRESULT CALLBACK Application::sWndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARA
 	}
 	return DefWindowProc(hWnd, Msg, wParam, lParam);
 }
-
 
 LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 {
@@ -155,10 +145,10 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 			switch (LOWORD(wParam))
 			{
 			case 'R': // reload shader
-				sdf_renderer->initShader(*includer);
+				initShader();
 				break;
 			case 'S': // scene manager
-				scene_manager->Open(hInstance);
+				scene_manager.Open(hInstance);
 				break;
 			case 'V': // variable manager
 				break;
@@ -204,38 +194,37 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 	return DefWindowProc(hWnd, Msg, wParam, lParam);
 }
 
-
 bool Application::initGraphics()
 {
-	graphics = std::make_unique<Graphics>();
-	if (!graphics->init(hWnd, false))
+	if (!graphics.init(hWnd, false))
 		return false;
 
-	profiler.setGPU(graphics->GetDevice(), graphics->GetContext());
+	profiler.setGPU(graphics.GetDevice(), graphics.GetContext());
 
 	RECT rect;
 	GetClientRect(hWnd, &rect);
 	float width = static_cast<float>(rect.right - rect.left);
 	float height = static_cast<float>(rect.bottom - rect.top);
 
-	includer = std::make_unique<ShaderIncluder>();
-	includer->setFolder("shader");
+	includer.setFolder("shader");
 
-	scene_manager = std::make_unique<SceneManager>();
-	scene_manager->setClient(this);
-	scene_manager->InitClass(hInstance);
-	scene_manager->setShaderFolder("shader");
-	scene_manager->setSceneFolder("scenes");
-	scene_manager->Open(hInstance);
+	scene_manager.setClient(this);
+	scene_manager.InitClass(hInstance);
+	scene_manager.setShaderFolder("shader");
+	scene_manager.setSceneFolder("scenes");
+	scene_manager.Open(hInstance);
 
-	sdf_renderer = std::make_unique<SDFRenderer>();
-	if (!sdf_renderer->init(graphics.get()))
+	if (!sdf_renderer.init(graphics))
 	{
 		return false;
 	}
 
-	hdr = std::make_unique<HDR>();
-	if (!hdr->init(graphics.get(), static_cast<unsigned>(width), static_cast<unsigned>(height)))
+	if (!hdr.init(graphics, static_cast<unsigned>(width), static_cast<unsigned>(height)))
+	{
+		return false;
+	}
+
+	if (!fullscreen_quad.init(graphics))
 	{
 		return false;
 	}
@@ -258,10 +247,17 @@ bool Application::initGraphics()
 	scroll_pos3 = 0.f;
 
 	// default scene
-	includer->setSubstitutions({ {"sdf_scene.hlsl", "scenes/sdf_scene_cube.hlsl"} });
-	sdf_renderer->initShader(*includer);
+	includer.setSubstitutions({ {"sdf_scene.hlsl", "scenes/sdf_scene_cube.hlsl"} });
+	initShader();
 
 	return true;
+}
+
+void Application::initShader()
+{
+	fullscreen_quad.initShader(includer);
+	sdf_renderer.initShader(includer);
+	hdr.initShader(includer);
 }
 
 void Application::render()
@@ -278,22 +274,44 @@ void Application::render()
 		}
 	}
 
+	SDFRenderer::DebugPlane debug_plane;
+	debug_plane.show = show_debug_plane;
+	debug_plane.ruler_scale = 1.f;
+	if (show_debug_plane)
+	{
+		if (scroll_pos1 > 0.f)
+		{
+			debug_plane.normal = Math3D::Matrix4x4::RotationXMatrix(scroll_pos1 * Math3D::PI * +0.5f) * Math3D::Vector3(0.f, 1.f, 0.f);
+		}
+		else
+		{
+			debug_plane.normal = Math3D::Matrix4x4::RotationZMatrix(scroll_pos1 * Math3D::PI * -0.5f) * Math3D::Vector3(0.f, 1.f, 0.f);
+		}
+	}
+	else
+	{
+		debug_plane.normal = Math3D::Vector3::NullVector();
+	}
+	debug_plane.point = debug_plane.normal * scroll_pos2;
+
+	sdf_renderer.setParameters(debug_plane, stime);
+
 	float clear_color[4] = {0.25f, 0.f, 0.f, 0.f};
-	auto ctx = graphics->GetContext();
+	auto ctx = graphics.GetContext();
 
 	profiler.beginFrame();
 
-	auto main_rendertarget = graphics->GetMainRendertargetView();
-	auto hdr_rendertarget = hdr->getRenderTarget();
+	auto main_rendertarget = graphics.GetMainRendertargetView();
+	auto hdr_rendertarget = hdr.getRenderTarget();
 
 	ctx->OMSetRenderTargets(1, &hdr_rendertarget, nullptr);
 
 	ctx->ClearRenderTargetView(hdr_rendertarget, clear_color);
 	profiler.profile("clear");
 
-	if (sdf_renderer->render(profiler, camera))
+	if (sdf_renderer.render(fullscreen_quad, profiler, camera))
 	{
-		hdr->process(profiler, main_rendertarget);
+		hdr.process(fullscreen_quad, profiler, main_rendertarget);
 	}
 	else
 	{
@@ -301,11 +319,11 @@ void Application::render()
 		ctx->ClearRenderTargetView(main_rendertarget, clear_color);
 	}
 
-	graphics->Present();
+	graphics.Present();
 	profiler.profile("present");
 	profiler.endFrame();
 
-	graphics->WaitForVBlank();
+	graphics.WaitForVBlank();
 }
 
 
@@ -348,6 +366,6 @@ void Application::updateSimulation(float dt)
 
 void Application::loadScene(const std::filesystem::path &filename)
 {
-	includer->setSubstitutions({ {"sdf_scene.hlsl", filename.string()} });
-	sdf_renderer->initShader(*includer);
+	includer.setSubstitutions({ {"sdf_scene.hlsl", filename.string()} });
+	initShader();
 }

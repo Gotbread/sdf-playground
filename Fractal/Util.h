@@ -45,6 +45,15 @@ private:
 	std::string str_cache;
 };
 
+template<class T, size_t N>
+void set_array(T (&arr)[N], const T &setval)
+{
+	for (auto elem : arr)
+	{
+		elem = setval;
+	}
+}
+
 
 std::string readFromFile(std::ifstream &file);
 void ErrorBox(const std::string &msg);

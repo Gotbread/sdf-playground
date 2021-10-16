@@ -90,10 +90,10 @@ LRESULT CALLBACK SceneManager::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARA
 			}
 			else if (hControl == hSceneLoad)
 			{
-				int index = SendMessage(hSceneSelect, LB_GETCURSEL, 0, 0);
+				LRESULT index = SendMessage(hSceneSelect, LB_GETCURSEL, 0, 0);
 				if (index != LB_ERR)
 				{
-					auto filename = getStringFromListbox(hSceneSelect, index);
+					auto filename = getStringFromListbox(hSceneSelect, static_cast<int>(index));
 					loadScene(getFullFilename(filename));
 				}
 			}
@@ -115,10 +115,10 @@ LRESULT CALLBACK SceneManager::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARA
 	case WM_TIMER:
 		if (reload_on_save)
 		{
-			int index = SendMessage(hSceneSelect, LB_GETCURSEL, 0, 0);
+			LRESULT index = SendMessage(hSceneSelect, LB_GETCURSEL, 0, 0);
 			if (index != LB_ERR)
 			{
-				auto filename = getStringFromListbox(hSceneSelect, index);
+				auto filename = getStringFromListbox(hSceneSelect, static_cast<int>(index));
 				auto full_filename = getFullFilename(filename);
 
 				auto write_time = std::filesystem::last_write_time(shader_folder / full_filename);
@@ -129,6 +129,7 @@ LRESULT CALLBACK SceneManager::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARA
 				}
 			}
 		}
+		break;
 	case WM_DESTROY:
 		this->hWnd = 0;
 		break;

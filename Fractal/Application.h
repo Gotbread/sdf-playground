@@ -13,6 +13,7 @@
 #include "ShaderUtil.h"
 #include "SDFRenderer.h"
 #include "Postprocessing.h"
+#include "FullscreenQuad.h"
 
 class Application : public SceneManagerClient
 {
@@ -24,6 +25,7 @@ private:
 	static LRESULT CALLBACK sWndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
 
 	bool initGraphics();
+	void initShader();
 	void render();
 	void updateSimulation(float dt);
 
@@ -33,12 +35,12 @@ private:
 	HINSTANCE hInstance;
 	HWND hWnd;
 
-	std::unique_ptr<Graphics> graphics;
-	std::unique_ptr<SceneManager> scene_manager;
-	std::unique_ptr<ShaderIncluder> includer;
-	std::unique_ptr<SDFRenderer> sdf_renderer;
-	std::unique_ptr<HDR> hdr;
-
+	Graphics graphics;
+	SceneManager scene_manager;
+	ShaderIncluder includer;
+	FullscreenQuad fullscreen_quad;
+	SDFRenderer sdf_renderer;
+	HDR hdr;
 	GPUProfiler profiler;
 
 	Camera camera;
