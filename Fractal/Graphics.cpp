@@ -3,16 +3,13 @@
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "d3d11.lib")
 
-
 Graphics::Graphics()
 {
 }
 
-
 Graphics::~Graphics()
 {
 }
-
 
 bool Graphics::init(HWND hWnd, bool create_depth)
 {
@@ -27,7 +24,6 @@ bool Graphics::init(HWND hWnd, bool create_depth)
 
 	return true;
 }
-
 
 bool Graphics::initMonitor()
 {
@@ -45,7 +41,6 @@ bool Graphics::initMonitor()
 
 	return true;
 }
-
 
 bool Graphics::initDevice(HWND hWnd)
 {
@@ -97,7 +92,6 @@ bool Graphics::initDevice(HWND hWnd)
 
 	return true;
 }
-
 
 bool Graphics::initPipeline(bool create_depth)
 {
@@ -180,42 +174,35 @@ bool Graphics::initPipeline(bool create_depth)
 	return true;
 }
 
-
 void Graphics::Present()
 {
 	swapchain->Present(0, 0);
 }
-
 
 void Graphics::WaitForVBlank()
 {
 	output->WaitForVBlank();
 }
 
-
 ID3D11Device *Graphics::GetDevice()
 {
 	return device;
 }
-
 
 ID3D11DeviceContext *Graphics::GetContext()
 {
 	return context;
 }
 
-
 IDXGISwapChain *Graphics::GetSwapChain()
 {
 	return swapchain;
 }
 
-
 ID3D11RenderTargetView *Graphics::GetMainRendertargetView()
 {
 	return rendertargetview;
 }
-
 
 ID3D11DepthStencilView *Graphics::GetMainDepthStencilView()
 {
