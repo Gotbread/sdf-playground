@@ -71,12 +71,15 @@ void Application::Run()
 	auto lasttime = GetTickCount64();
 
 	MSG Msg;
-	do
+	for (;;)
 	{
 		while (PeekMessage(&Msg, 0, 0, 0, PM_REMOVE))
 		{
 			TranslateMessage(&Msg);
 			DispatchMessage(&Msg);
+
+			if (Msg.message == WM_QUIT)
+				return;
 		}
 
 		auto newtime = GetTickCount64();
@@ -86,7 +89,6 @@ void Application::Run()
 		updateSimulation(static_cast<float>(diff) / 1000.f);
 		render();
 	}
-	while (Msg.message != WM_QUIT);
 }
 
 LRESULT CALLBACK Application::sWndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
