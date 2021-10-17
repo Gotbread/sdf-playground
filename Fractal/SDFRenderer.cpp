@@ -58,6 +58,11 @@ void SDFRenderer::setParameters(const DebugPlane &debug_plane, float stime)
 	this->stime = stime;
 }
 
+VariableMap &SDFRenderer::getVariableMap()
+{
+	return var_manager.getVariables();
+}
+
 bool SDFRenderer::render(FullscreenQuad &quad, GPUProfiler &profiler, Camera &camera)
 {
 	auto ctx = graphics->GetContext();

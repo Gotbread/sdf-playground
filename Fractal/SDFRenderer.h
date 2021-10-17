@@ -3,6 +3,7 @@
 #include "Comptr.h"
 #include "Math3D.h"
 #include "ShaderUtil.h"
+#include "ShaderVariable.h"
 
 #include <d3d11.h>
 
@@ -28,6 +29,7 @@ public:
 	bool initShader(ShaderIncluder &includer);
 
 	void setParameters(const DebugPlane &debug_plane, float stime);
+	VariableMap &getVariableMap();
 
 	// true if it did render something, false otherwise
 	bool render(FullscreenQuad &quad, GPUProfiler &profiler, Camera &camera);
