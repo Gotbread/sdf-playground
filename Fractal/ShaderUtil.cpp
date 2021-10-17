@@ -103,7 +103,7 @@ void ShaderVariableManager::setSlot(unsigned slot)
 
 bool ShaderVariableManager::parseFile(const std::string &input, std::string &output)
 {
-	std::string var_tag = "VAR_";
+	auto var_tag = getVarTag();
 	auto [code_blocks, variable_blocks] = splitString(input, var_tag, ")");
 
 	output.clear();
@@ -115,6 +115,7 @@ bool ShaderVariableManager::parseFile(const std::string &input, std::string &out
 		auto bracket_end = variable_iter->find(")");
 
 		auto var_name = variable_iter->substr(0, bracket_begin);
+		auto var_name_short = variable_iter->substr(var_tag.size(), bracket_begin - var_tag.size());
 		auto param_string = variable_iter->substr(bracket_begin + 1, bracket_end - bracket_begin - 1);
 
 		output += *code_iter;
@@ -148,7 +149,7 @@ bool ShaderVariableManager::parseFile(const std::string &input, std::string &out
 		var.step = iter != param_map.end() ? iter->second : (var.maxval - var.minval) * 0.05f;
 		var.value = var.start;
 
-		variables[std::string(var_name)] = var;
+		variables[std::string(var_name_short)] = var;
 	}
 	output += code_blocks.back();
 	return true;
@@ -163,11 +164,11 @@ std::string ShaderVariableManager::generateHeader() const
 		"	float ";
 	for (bool comma = false; auto &[name, var] : variables)
 	{
-		formatter << name;
 		if (comma)
 		{
 			formatter << ", ";
 		}
+		formatter << getVarTag() << name;
 		comma = true;
 	}
 	formatter << ";\n";
@@ -182,12 +183,12 @@ bool ShaderVariableManager::hasVariables() const
 	return !variables.empty();
 }
 
-std::map<std::string, ShaderVariableManager::Variable> &ShaderVariableManager::getVariables()
+VariableMap &ShaderVariableManager::getVariables()
 {
 	return variables;
 }
 
-void ShaderVariableManager::setValue(const std::string &name, float val)
+void ShaderVariableManager::setValue(std::string_view name, float val)
 {
 	if (auto iter = variables.find(name); iter != variables.end())
 	{
@@ -215,9 +216,9 @@ void ShaderVariableManager::updateBuffer(ID3D11DeviceContext *ctx)
 	D3D11_MAPPED_SUBRESOURCE res;
 	ctx->Map(cbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &res);
 	float *ptr = static_cast<float *>(res.pData);
-	for (auto &elem : variables)
+	for (const auto &[name, var] : variables)
 	{
-		*ptr++ = elem.second.value;
+		*ptr++ = var.value;
 	}
 	ctx->Unmap(cbuffer, 0);
 }
@@ -225,6 +226,11 @@ void ShaderVariableManager::updateBuffer(ID3D11DeviceContext *ctx)
 ID3D11Buffer *ShaderVariableManager::getBuffer()
 {
 	return cbuffer;
+}
+
+std::string_view ShaderVariableManager::getVarTag()
+{
+	return "VAR_";
 }
 
 Comptr<ID3DBlob> compileShader(ShaderIncluder &includer, const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings, bool disassemble)

@@ -1,10 +1,12 @@
 #pragma once
 
 #include "Comptr.h"
+#include "ShaderVariable.h"
 
 #include <d3dcommon.h>
 #include <d3d11.h>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <map>
 #include <filesystem>
@@ -17,7 +19,7 @@ public:
 	using Substitution = std::pair<std::string, std::string>;
 	using MemoryHeader = std::pair<std::string, std::string>;
 
-	void setFolder(const std::string &folder);
+	void setFolder(std::string_view folder);
 	void setSubstitutions(std::vector<Substitution> substitutions);
 	void setExtraHeaders(std::vector<MemoryHeader> headers);
 	void setShaderVariableManager(ShaderVariableManager *var_manager);
@@ -37,12 +39,6 @@ private:
 class ShaderVariableManager
 {
 public:
-	struct Variable
-	{
-		float minval, maxval, start, step;
-		float value; // the current value
-	};
-
 	// sets the slot of the corresponding constant buffer
 	void setSlot(unsigned slot);
 	// parses the input shader, replaces all variable encounters
@@ -51,14 +47,16 @@ public:
 	std::string generateHeader() const;
 
 	bool hasVariables() const;
-	std::map<std::string, Variable> &getVariables();
-	void setValue(const std::string &name, float val);
+	VariableMap &getVariables();
+	void setValue(std::string_view name, float val);
 
 	bool createConstantBuffer(ID3D11Device *dev);
 	void updateBuffer(ID3D11DeviceContext *ctx);
 	ID3D11Buffer *getBuffer();
 private:
-	std::map<std::string, Variable> variables;
+	static std::string_view getVarTag();
+
+	VariableMap variables;
 	unsigned slot;
 
 	Comptr<ID3D11Buffer> cbuffer;
