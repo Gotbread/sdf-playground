@@ -8,10 +8,12 @@ const char *SceneManager::classname = "Scenemanager";
 
 void SceneManager::InitClass(HINSTANCE hInstance)
 {
+	this->hInstance = hInstance;
+
 	WNDCLASS wc = { 0 };
 	wc.cbWndExtra = sizeof(this);
 	wc.hCursor = LoadCursor(0, IDC_ARROW);
-	wc.hbrBackground = CreateSolidBrush(RGB(255, 255, 255));
+	wc.hbrBackground = GetSysColorBrush(COLOR_WINDOW);
 	wc.hInstance = hInstance;
 	wc.lpszClassName = classname;
 	wc.lpfnWndProc = sWndProc;
@@ -19,7 +21,7 @@ void SceneManager::InitClass(HINSTANCE hInstance)
 	RegisterClass(&wc);
 }
 
-bool SceneManager::Open(HINSTANCE hInstance)
+bool SceneManager::Open()
 {
 	if (hWnd) // already open
 	{

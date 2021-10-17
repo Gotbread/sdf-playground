@@ -15,7 +15,7 @@ class SceneManager
 {
 public:
 	void InitClass(HINSTANCE hInstance);
-	bool Open(HINSTANCE hInstance);
+	bool Open();
 
 	void setShaderFolder(const std::string &folder);
 	void setSceneFolder(const std::string &folder);
@@ -29,6 +29,7 @@ private:
 	std::filesystem::path getFullFilename(const std::filesystem::path &filename);
 	void loadScene(const std::filesystem::path &filename);
 
+	HINSTANCE hInstance;
 	HWND hWnd = 0;
 
 	HWND hSceneSelect, hSceneRefresh, hSceneLoad;
