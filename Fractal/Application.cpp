@@ -7,8 +7,6 @@
 #include "Math3D.h"
 #include "Util.h"
 
-#pragma comment(lib, "d3dcompiler.lib")
-
 using namespace Math3D;
 
 bool Application::Init(HINSTANCE hInstance)

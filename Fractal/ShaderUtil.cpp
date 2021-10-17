@@ -6,7 +6,9 @@
 #include <string_view>
 #include <algorithm>
 
-void ShaderIncluder::setFolder(const std::string &folder)
+#pragma comment(lib, "d3dcompiler.lib")
+
+void ShaderIncluder::setFolder(std::string_view folder)
 {
 	this->folder = folder;
 }
