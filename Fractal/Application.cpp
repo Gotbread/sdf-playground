@@ -148,9 +148,10 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 				initShader();
 				break;
 			case 'S': // scene manager
-				scene_manager.Open(hInstance);
+				scene_manager.Open();
 				break;
 			case 'V': // variable manager
+				variable_manager.Open();
 				break;
 			}
 		}
@@ -212,7 +213,10 @@ bool Application::initGraphics()
 	scene_manager.InitClass(hInstance);
 	scene_manager.setShaderFolder("shader");
 	scene_manager.setSceneFolder("scenes");
-	scene_manager.Open(hInstance);
+	scene_manager.Open();
+
+	variable_manager.InitClass(hInstance);
+	variable_manager.Open();
 
 	if (!sdf_renderer.init(graphics))
 	{
@@ -255,9 +259,16 @@ bool Application::initGraphics()
 
 void Application::initShader()
 {
+	variable_manager.resetVariables();
+
 	fullscreen_quad.initShader(includer);
-	sdf_renderer.initShader(includer);
+	if (sdf_renderer.initShader(includer))
+	{
+		variable_manager.setVariables("scene", &sdf_renderer.getVariableMap());
+	}
 	hdr.initShader(includer);
+
+	variable_manager.createControls();
 }
 
 void Application::render()
@@ -265,13 +276,13 @@ void Application::render()
 	if (profiler.fetchResults())
 	{
 		auto results = profiler.getResults();
-		OutputDebugString("======================\n");
+		/*OutputDebugString("======================\n");
 		for (auto &elem : results)
 		{
 			std::string name = elem.first.empty() ? "Total" : elem.first;
 			std::string msg = Format() << name << ": " << elem.second * 1000.f << "ms\n";
 			OutputDebugString(msg.c_str());
-		}
+		}*/
 	}
 
 	SDFRenderer::DebugPlane debug_plane;

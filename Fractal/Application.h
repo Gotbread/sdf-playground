@@ -10,6 +10,7 @@
 #include "Math3D.h"
 #include "GPUProfiler.h"
 #include "SceneManager.h"
+#include "VariableManager.h"
 #include "ShaderUtil.h"
 #include "SDFRenderer.h"
 #include "Postprocessing.h"
@@ -37,6 +38,7 @@ private:
 
 	Graphics graphics;
 	SceneManager scene_manager;
+	VariableManager variable_manager;
 	ShaderIncluder includer;
 	FullscreenQuad fullscreen_quad;
 	SDFRenderer sdf_renderer;
