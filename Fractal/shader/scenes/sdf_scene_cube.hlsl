@@ -15,7 +15,12 @@
 // extra vector, meaning depends on material
 float2 map(float4 pos, float3 dir, out float3 material_property)
 {
-	float obj = sdBox(pos.xyz - float3(0.f, 1.f, 0.f), VAR_size(min=0.2, max=2, start=1, step=0.2));
+	float size = VAR_size(min = 0.2, max = 2, start = 1, step = 0.2);
+	float x = VAR_xpos(min = -2, max = 2, start = 0, step = 0.1);
+	float y = VAR_ypos(min = -2, max = 2, start = 0, step = 0.1);
+	float z = VAR_zpos(min = -2, max = 2, start = 0, step = 0.1);
+
+	float obj = sdBox(pos.xyz - float3(0.f, 1.f, 0.f) - float3(x, y, z), size);
 
 	// floor
 	float floor1 = sdPlaneFast(pos.xyz, dir, float3(0.f, 1.f, 0.f));
@@ -23,7 +28,10 @@ float2 map(float4 pos, float3 dir, out float3 material_property)
 	// select
 	if (obj < floor1)
 	{
-		material_property = float3(0.9f, 0.7f, 0.2f);
+		float r = VAR_red(min = 0, max = 1, start = 0.9, step = 0.05);
+		float g = VAR_green(min = 0, max = 1, start = 0.7, step = 0.05);
+		float b = VAR_blue(min = 0, max = 1, start = 0.2, step = 0.05);
+		material_property = float3(r, g, b);
 		return float2(obj, 3.f);
 	}
 	else
