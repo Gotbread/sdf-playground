@@ -57,6 +57,9 @@
     <ClCompile Include="FullscreenQuad.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
+    <ClCompile Include="VariableManager.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Application.h">
@@ -98,25 +101,11 @@
     <ClInclude Include="FullscreenQuad.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="shader\noise.hlsl">
-      <Filter>Ressourcendateien\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="shader\pshader.hlsl">
-      <Filter>Ressourcendateien\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="shader\sdf_primitive.hlsl">
-      <Filter>Ressourcendateien\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="shader\sdf_scene_cube.hlsl">
-      <Filter>Ressourcendateien\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="shader\sdf_scene_fractal.hlsl">
-      <Filter>Ressourcendateien\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="shader\vshader.hlsl">
-      <Filter>Ressourcendateien\shader</Filter>
-    </FxCompile>
+    <ClInclude Include="ShaderVariable.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="VariableManager.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
