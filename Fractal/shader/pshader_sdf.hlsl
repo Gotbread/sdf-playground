@@ -165,6 +165,7 @@ bool raymarch_scene_obstruction(float3 pos, float3 dir, float max_dist, out floa
 
 float4 colorize(float3 pos, float3 dir, float scene_distance, float iter_count, float material_id, float3 material_property)
 {
+	float3 color_multiplier = float3(1.f, 1.f, 1.f);
 	float3 col = float3(0.1f, 0.1f, 0.f); // the output color
 	float3 extra_color = float3(0.f, 0.f, 0.f);
 
@@ -177,6 +178,22 @@ float4 colorize(float3 pos, float3 dir, float scene_distance, float iter_count, 
 		extra_color = fire(material_property, 1.f - fadeout);
 		
 		// continue
+		float4 hit_info;
+		if (raymarch_scene_opaque(pos, dir, max_dist_check, hit_info, material_property))
+		{
+			scene_distance = hit_info.z;
+			iter_count += hit_info.y;
+			material_id = hit_info.x;
+		}
+	}
+	if (material_id == 50.f) // 50 = mirror
+	{
+		float3 normal = grad(pos, scene_distance, 1.f);
+
+		pos -= normal * 0.01f;
+		dir = reflect(dir, normal);
+		color_multiplier = material_property;
+
 		float4 hit_info;
 		if (raymarch_scene_opaque(pos, dir, max_dist_check, hit_info, material_property))
 		{
@@ -235,7 +252,7 @@ float4 colorize(float3 pos, float3 dir, float scene_distance, float iter_count, 
 
 		col = diffuse_color * (diffuse_shading + ambient_lighting_factor) + specular_color * specular_shading;
 	}
-	return float4(col + extra_color, 1.f);
+	return float4(color_multiplier * (col + extra_color), 1.f);
 }
 
 void ps_main(ps_input input, out ps_output output)

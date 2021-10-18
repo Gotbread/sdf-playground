@@ -287,7 +287,7 @@ void Application::render()
 
 	SDFRenderer::DebugPlane debug_plane;
 	debug_plane.show = show_debug_plane;
-	debug_plane.ruler_scale = 1.f;
+	debug_plane.ruler_scale = 0.05f;
 	if (show_debug_plane)
 	{
 		if (scroll_pos1 > 0.f)
