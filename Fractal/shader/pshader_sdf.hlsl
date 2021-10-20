@@ -1,7 +1,5 @@
-#include "sdf_primitives.hlsl"
-#include "sdf_ops.hlsl"
 #include "sdf_materials.hlsl"
-#include "user_variables.hlsl"
+#include "sdf_structs.hlsl"
 #include "noise.hlsl"
 #include "math_constants.hlsl"
 
@@ -31,140 +29,6 @@ cbuffer camera : register(b0)
 	float debug_ruler_scale;
 };
 
-struct GeometryInput
-{
-	// the position in 3D worldspace
-	float3 pos;
-
-	// xyz: the direction of the ray, if directional
-	float3 dir;
-
-	// if true, the ray_dir is set and can be used for accelerating the marching
-	bool has_dir;
-
-	// if true, we are inside an object and work with negative distance values
-	// if false, we are outside an object and work with positive distance values (default case)
-	bool is_inside;
-
-	// where the last point of transparency was, in order to remove this object
-	float3 last_transparent_pos;
-
-	// if last_transparent_pos is valid
-	bool has_transparent;
-
-	// the euclidean distance from the eye
-	float camera_distance;
-
-	// points to the pixel right of this one, per unit of eye distance
-	float3 right_ray_offset;
-
-	// points to the pixel below this one, per unit of eye distance
-	float3 bottom_ray_offset;
-};
-
-struct NormalOutput
-{
-	// the spacing to use for sampling of the normal vector
-	// larger than usual values lead to rounded corners
-	// preloaded with the default one
-	float normal_sample_dist;
-
-	// the user generated normal
-	float3 normal;
-
-	// if true, uses the user generated normal instead of computing it by sampling
-	// to increase speed. default false
-	bool use_normal;
-};
-
-struct MaterialInput
-{
-	// the position in 3D worldspace
-	float3 pos;
-
-	// the normal of the object
-	float3 obj_normal;
-
-	// how many iterations we did to get here
-	uint iteration_count;
-
-	// the euclidean distance from the eye
-	float camera_distance;
-
-	// the last distance to the scene
-	float scene_distance;
-
-	// points to the pixel right of this one, per unit of eye distance
-	float3 right_ray_offset;
-
-	// points to the pixel below this one, per unit of eye distance
-	float3 bottom_ray_offset;
-};
-
-struct MaterialOutput
-{
-	// which material to use
-	uint material_id;
-
-	// for volumetric materials. xyz is the space position, w could be time
-	float4 material_position;
-
-	// some extra material properties
-	float4 material_properties;
-
-	// rgb: normal color
-	// a: transparency
-	float4 diffuse_color;
-
-	// rgb: specular color
-	// a: specular power
-	float4 specular_color;
-
-	// glows on its own
-	float3 emissive_color;
-
-	// how the color reflected gets modulated. should be <1 per component
-	// if zero, no reflection is calculated
-	float3 reflection_color;
-
-	// how the refraction gets modulated. should be <1 per component
-	float3 refraction_color;
-
-	// index of refraction of this medium
-	float optical_index;
-
-	// how quickly the light will fall off
-	float optical_density;
-
-	// xyz: output normal, if any
-	// w: blend factor between the old normal and this. 1 means use this, 0 means use existing one
-	float4 normal;
-};
-
-struct LightInput
-{
-	// the position in 3D worldspace
-	float3 pos;
-
-	// the euclidean distance from the eye
-	float camera_distance;
-};
-
-struct LightOutput
-{
-	// whether this light source is used. preloaded with false
-	bool used;
-
-	// where is the source
-	float3 pos;
-
-	// what color does it have
-	float3 color;
-
-	// how fast does it fall off?
-	float falloff;
-};
-
 static const float dist_eps = 0.0001f;    // how close to the object before terminating
 static const float grad_eps = 0.0001f;    // how far to move when computing the gradient
 static const float reflect_eps = 0.001f;  // how far to move the ray along after a reflection
@@ -173,9 +37,6 @@ static const float max_dist_check = 1e30; // maximum practical number
 
 static const float3 lighting_dir = normalize(float3(-1.f, -2.f, 1.5f));
 static const float ambient_lighting_factor = 0.05f;
-
-// include the scene here so it has access to all constants
-//#include "sdf_scene.hlsl"
 
 /*
 float3 debug_plane_color(float scene_distance)
@@ -424,156 +285,26 @@ struct Ray
 };
 
 // must be bigger than bounce count
-#define INVALID_DEPTH 1000
+#define INVALID_DEPTH 1000000
 
 #define BOUNCE_COUNT 8
-#define ITER_COUNT 100
 #define RAY_COUNT 3
+#define ITER_COUNT 100
+#define LIGHT_COUNT 8
 
 #define MATERIAL_NONE 0
 #define MATERIAL_ITER 1
 #define MATERIAL_NORMAL 2
 #define MATERIAL_WOOD 20
 
-float map_geometry(GeometryInput input)
-{
-	// lower background
-	float3 background1_pos = input.pos - float3(0.f, -5.f, 0.f);
-	background1_pos.xz = opRepInf(background1_pos.xz, 3.f);
-	float background1_sphere = sdSphere(background1_pos, 1.f);
-	float background1_box = sdBox(background1_pos, 1.f);
-	float background1 = lerp(background1_sphere, background1_box, 0.65) - 0.1;
-
-	// upper background
-	float3 background2_pos = input.pos - float3(0.f, +5.f, 0.f);
-	background2_pos.xz = opRepInf(background2_pos.xz, 10.f);
-	float background2_sphere = sdSphere(background2_pos, 1.f);
-	float background2_box = sdBox(background2_pos, 1.f);
-	float background2 = lerp(background2_sphere, background2_box, 0.65) - 0.1;
-
-	// lense
-	float3 lance_pos = abs(input.pos);
-	lance_pos.z -= 5.1f;
-	float lance1 = sdSphere(lance_pos, 5.f);
-	float lance2 = sdSphere(input.pos, 2.f);
-	float lance = max(-lance1, lance2);
-
-	// sphere
-	float x = VAR_xpos(min = -4, max = 4, step = 0.1);
-	float y = VAR_ypos(min = -4, max = 4, step = 0.1);
-	float z = VAR_zpos(min = 0, max = 25, step = 0.1);
-	float3 sphere_pos = input.pos - float3(x, y, z);
-	float sphere = sdSphere(sphere_pos, 2.f);
-
-	// mirror
-	float3 mirror_position = input.pos - float3(0.f, 0.f, -5.f);
-	mirror_position.xz = opRotate(mirror_position.xz, 1.2f);
-	float mirror = sdBox(mirror_position, float3(1.f, 2.f, 0.1f));
-	float mirror_frame = sdBox(mirror_position, float3(1.1f, 2.1f, 0.08f));
-
-	float background = min(background1, background2);
-	return min(min(min(min(lance, sphere), mirror), mirror_frame), background);
-}
-
-void map_normal(GeometryInput input, inout NormalOutput output)
-{
-}
-
-void map_material(MaterialInput input, inout MaterialOutput output)
-{
-	// lower background
-	float3 background1_pos = input.pos - float3(0.f, -5.f, 0.f);
-	background1_pos.xz = opRepInf(background1_pos.xz, 3.f);
-	float2 cell_index = (input.pos.xz - background1_pos.xz) / 3.f;
-	float background1_sphere = sdSphere(background1_pos, 1.f);
-	float background1_box = sdBox(background1_pos, 1.f);
-	float background1 = lerp(background1_sphere, background1_box, 0.65) - 0.1;
-
-	// upper background
-	float3 background2_pos = input.pos - float3(0.f, +5.f, 0.f);
-	background2_pos.xz = opRepInf(background2_pos.xz, 10.f);
-	float background2_sphere = sdSphere(background2_pos, 1.f);
-	float background2_box = sdBox(background2_pos, 1.f);
-	float background2 = lerp(background2_sphere, background2_box, 0.65) - 0.1;
-
-	// lense
-	float3 lance_pos = abs(input.pos);
-	lance_pos.z -= 5.1f;
-	float lance1 = sdSphere(lance_pos, 5.f);
-	float lance2 = sdSphere(input.pos, 2.f);
-	float lance = max(-lance1, lance2);
-
-	// sphere
-	float x = VAR_xpos(min = -4, max = 4, step = 0.1);
-	float y = VAR_ypos(min = -4, max = 4, step = 0.1);
-	float z = VAR_zpos(min = 0, max = 25, step = 0.1);
-	float3 sphere_pos = input.pos - float3(x, y, z);
-	float sphere = sdSphere(sphere_pos, 2.f);
-
-	// mirror
-	float3 mirror_position = input.pos - float3(0.f, 0.f, -5.f);
-	mirror_position.xz = opRotate(mirror_position.xz, 1.2f);
-	float mirror = sdBox(mirror_position, float3(1.f, 2.f, 0.1f));
-
-	// mirror frame
-	float mirror_frame = sdBox(mirror_position, float3(1.1f, 2.1f, 0.08f));
-
-
-	if (abs(background1) < dist_eps)
-	{
-		//float2 cell_color = sin(cell_index * 0.3f) * 0.5f + 0.5f;
-		float3 cell_color = cell_index.x < 0.01f ? float3(0.f, 1.f, 0.f) : float3(0.f, 0.f, 1.f);
-		output.diffuse_color = float4(cell_color, 1.f);
-		output.specular_color.rgb = 1.f;
-		output.reflection_color = 0.5f;
-	}
-	else if (abs(background2) < dist_eps)
-	{
-		output.diffuse_color = float4(1.f, 0.5f, 0.f, 1.f);
-		output.specular_color.rgb = 1.f;
-		output.reflection_color = 0.5f;
-	}
-	else if (abs(lance) < dist_eps)
-	{
-		output.diffuse_color = float4(0.3f, 0.3f, 0.3f, 1.f);
-		output.refraction_color = float3(0.9f, 0.9f, 0.9f);
-	}
-	else if (abs(sphere) < dist_eps)
-	{
-		output.diffuse_color = float4(0.8f, 0.2f, 0.2f, 1.f);
-		output.emissive_color = float3(8.f, 0.f, 0.f);
-		output.specular_color.rgb = 1.f;
-		output.reflection_color = 0.25f;
-		output.normal.xyz = input.obj_normal + snoise(input.pos * 60.f) * 0.1f;
-		output.normal.a = 0.f;
-	}
-	else if (abs(mirror) < dist_eps)
-	{
-		output.diffuse_color = float4(0.1f, 0.1f, 0.1f, 1.f);
-		float mix_ratio = VAR_mixing(min = 0, max = 1, step = 0.05);
-		output.refraction_color = mix_ratio;
-		output.reflection_color = 1.f - mix_ratio;
-	}
-	else if (abs(mirror_frame) < dist_eps)
-	{
-		//output.diffuse_color = float4(1.f, 0.2f, 0.2f, 1.f);
-		output.material_position.xyz = mirror_position;
-		output.material_id = MATERIAL_WOOD;
-	}
-}
-
-void map_light(LightInput input, inout LightOutput output)
-{
-	output.used = true;
-	output.pos = float3(0.f, 5.f, 0.f);
-	output.color = float3(0.f, 0.f, 1.f);
-	output.falloff = 0.f; // still not decided
-}
+#include "sdf_scene.hlsl"
 
 float3 grad(GeometryInput geometry, float baseline, float sample_distance)
 {
 	float3 offset = float3(sample_distance, 0.f, 0.f);
 	float3 pos = geometry.pos;
+
+	geometry.use_fast = false;
 
 	geometry.pos = pos + offset.xyz;
 	float d1 = map_geometry(geometry) - baseline;
@@ -693,7 +424,7 @@ void ps_main(ps_input input, out ps_output output)
 		GeometryInput geometry_input;
 		geometry_input.pos = rays[ray_index].pos;
 		geometry_input.dir = rays[ray_index].dir;
-		geometry_input.has_dir = false;
+		geometry_input.use_fast = true;
 		geometry_input.is_inside = false;
 		geometry_input.has_transparent = false;
 		geometry_input.last_transparent_pos = float3(0.f, 0.f, 0.f);
@@ -710,11 +441,13 @@ void ps_main(ps_input input, out ps_output output)
 			normal_output.normal = float3(0.f, 0.f, 0.f);
 			normal_output.normal_sample_dist = grad_eps;
 
+			geometry_input.use_fast = false;
 			map_normal(geometry_input, normal_output);
 			if (!normal_output.use_normal)
 			{
 				normal_output.normal = grad(geometry_input, scene_distance * inside_sign, normal_output.normal_sample_dist);
 			}
+			geometry_input.use_fast = true;
 
 			// get the material
 			MaterialInput material_input;
@@ -819,7 +552,6 @@ void ps_main(ps_input input, out ps_output output)
 
 			// handle shadow
 			geometry_input.pos += new_normal * shadow_eps;
-			//geometry_input.pos += float3(0.f, 0.1f, 0.0);;
 			geometry_input.dir = -lighting_dir;
 			uint iter_count_unused;
 			float scene_distance_unused;
@@ -842,7 +574,13 @@ void ps_main(ps_input input, out ps_output output)
 		}
 		else
 		{
-			float3 background_color = float3(0.f, 0.25f, 0.f);
+			float3 dir = geometry_input.dir;
+			float noiseval = turbulence(dir * float3(1.f, 6.f, 1.f) * 2.5f);
+			float3 color1 = float3(43.f, 164.f, 247.f) / 255.f;
+			float3 color2 = float3(212.f, 224.f, 238.f) / 255.f;
+			float3 sky_color = lerp(color1, color2, noiseval) * 1.2f;
+			float3 horizon_color = float3(0.25f, 0.25f, 0.25f);
+			float3 background_color = lerp(horizon_color, sky_color, saturate(dir.y * 3.f));
 			output.color.rgb += background_color * ray_contribution;
 		}
 		// keep track of closest point relative to camera distance -> antialiasing
