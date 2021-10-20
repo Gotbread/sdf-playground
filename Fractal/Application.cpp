@@ -251,7 +251,7 @@ bool Application::initGraphics()
 	scroll_pos3 = 0.f;
 
 	// default scene
-	includer.setSubstitutions({ {"sdf_scene.hlsl", "scenes/sdf_scene_cube.hlsl"} });
+	includer.setSubstitutions({ {"sdf_scene.hlsl", "scenes/sdf_scene_lense.hlsl"} });
 	initShader();
 
 	return true;
