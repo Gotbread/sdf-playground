@@ -126,10 +126,14 @@ bool ShaderVariableManager::parseFile(const std::string &input, std::string &out
 		std::map<std::string, float> param_map;
 		for (const auto &param : params)
 		{
-			auto [parts, _] = splitString(param, "=");
+			auto [parts, separators] = splitString(param, "=");
 			if (parts.size() != 2)
 			{
-				return false;
+				if (separators.size() == 1)
+				{
+					return false;
+				}
+				break;
 			}
 
 			auto name_str = removeSpaces(parts[0]);
@@ -157,6 +161,11 @@ bool ShaderVariableManager::parseFile(const std::string &input, std::string &out
 
 std::string ShaderVariableManager::generateHeader() const
 {
+	if (variables.empty())
+	{
+		return {};
+	}
+
 	Format formatter;
 	formatter <<
 		"cbuffer user_variables : register(b" << slot << ")\n"
