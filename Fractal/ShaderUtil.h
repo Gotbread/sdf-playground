@@ -12,6 +12,7 @@
 #include <filesystem>
 
 class ShaderVariableManager;
+class ShaderCodeGenerator;
 
 class ShaderIncluder : public ID3DInclude
 {
@@ -23,6 +24,7 @@ public:
 	void setSubstitutions(std::vector<Substitution> substitutions);
 	void setExtraHeaders(std::vector<MemoryHeader> headers);
 	void setShaderVariableManager(ShaderVariableManager *var_manager);
+	void setShaderCodeGenerator(ShaderCodeGenerator *code_generator);
 
 	HRESULT STDMETHODCALLTYPE Open(D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID *ppData, UINT *pBytes);
 	HRESULT STDMETHODCALLTYPE Close(LPCVOID pData);
@@ -33,7 +35,9 @@ private:
 	std::filesystem::path folder;
 	std::vector<Substitution> substitutions;
 	std::vector<MemoryHeader> headers;
-	ShaderVariableManager *var_manager;
+
+	ShaderVariableManager *var_manager = nullptr;
+	ShaderCodeGenerator *code_generator = nullptr;
 };
 
 class ShaderVariableManager
@@ -60,6 +64,12 @@ private:
 	unsigned slot;
 
 	Comptr<ID3D11Buffer> cbuffer;
+};
+
+class ShaderCodeGenerator
+{
+public:
+	bool parseFile(const std::string &input, std::string &output);
 };
 
 Comptr<ID3DBlob> compileShader(ShaderIncluder &includer, const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings = true, bool disassemble = false);

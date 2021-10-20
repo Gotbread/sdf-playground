@@ -35,6 +35,7 @@ bool SDFRenderer::initShader(ShaderIncluder &includer)
 	var_manager.setSlot(1);
 	var_manager.getVariables().clear();
 	includer.setShaderVariableManager(&var_manager);
+	includer.setShaderCodeGenerator(&code_generator);
 	Comptr<ID3DBlob> p_compiled = compileShader(includer, "pshader_sdf.hlsl", "ps_5_0", "ps_main");
 	if (!p_compiled)
 		return false;

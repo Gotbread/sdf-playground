@@ -28,6 +28,11 @@ void ShaderIncluder::setShaderVariableManager(ShaderVariableManager *var_manager
 	this->var_manager = var_manager;
 }
 
+void ShaderIncluder::setShaderCodeGenerator(ShaderCodeGenerator *code_generator)
+{
+	this->code_generator = code_generator;
+}
+
 HRESULT STDMETHODCALLTYPE ShaderIncluder::Open(D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID *ppData, UINT *pBytes)
 {
 	std::string code;
@@ -91,6 +96,13 @@ bool ShaderIncluder::loadFromFile(const std::string &filename, std::string &code
 
 		std::string header = var_manager->generateHeader();
 		setExtraHeaders({ { "user_variables.hlsl", header } });
+	}
+
+	if (code_generator)
+	{
+		std::string new_code;
+		code_generator->parseFile(code, new_code);
+		code.swap(new_code);
 	}
 
 	return true;
@@ -242,6 +254,34 @@ std::string_view ShaderVariableManager::getVarTag()
 	return "VAR_";
 }
 
+bool ShaderCodeGenerator::parseFile(const std::string &input, std::string &output)
+{
+	/*output.clear();
+
+	// process map_normal function
+	{
+		std::string_view function_type = "void";
+		std::string_view function_name = "map_normal";
+
+		auto [code, signature] = splitString(input, function_type, function_name);
+		if (signature.empty()) // nothing found?
+		{
+			output += "void map_normal(GeometryInput input, inout NormalOutput output)\n{\n}\n";
+		}
+	}
+	//
+
+	// process the map_combined function
+	{
+		std::string_view function_type = "void";
+		std::string_view function_name = "map_combined";
+		auto [code, signature] = splitString(input, function_type, function_name);
+	}*/
+
+	output += input;
+	return true;
+}
+
 Comptr<ID3DBlob> compileShader(ShaderIncluder &includer, const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings, bool disassemble)
 {
 	std::string code;
@@ -254,7 +294,7 @@ Comptr<ID3DBlob> compileShader(ShaderIncluder &includer, const std::string &file
 	// then try to compile it
 	UINT flags =
 #ifdef _DEBUG
-		D3DCOMPILE_DEBUG |
+		D3DCOMPILE_DEBUG | D3DCOMPILE_OPTIMIZATION_LEVEL3 |
 #endif
 		0;
 

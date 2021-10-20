@@ -51,6 +51,7 @@ private:
 	Comptr<ID3D11PixelShader> p_shader;
 
 	ShaderVariableManager var_manager;
+	ShaderCodeGenerator code_generator;
 
 	DebugPlane debug_plane;
 	float stime = 0.f;
