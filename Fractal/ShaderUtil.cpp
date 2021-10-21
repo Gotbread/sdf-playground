@@ -294,9 +294,9 @@ Comptr<ID3DBlob> compileShader(ShaderIncluder &includer, const std::string &file
 	// then try to compile it
 	UINT flags =
 #ifdef _DEBUG
-		D3DCOMPILE_DEBUG | D3DCOMPILE_OPTIMIZATION_LEVEL3 |
+		D3DCOMPILE_DEBUG |
 #endif
-		0;
+		D3DCOMPILE_OPTIMIZATION_LEVEL3;
 
 	Comptr<ID3DBlob> compiled, error;
 	D3DCompile(code.c_str(), code.length(), filename.c_str(), nullptr, &includer, entry.c_str(), profile.c_str(), flags, 0, &compiled, &error);
