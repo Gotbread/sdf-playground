@@ -9,6 +9,8 @@
 
 using namespace Math3D;
 
+//#define PROFILE_OUTPUT
+
 bool Application::Init(HINSTANCE hInstance)
 {
 	WNDCLASS wc = { 0 };
@@ -34,8 +36,8 @@ bool Application::Init(HINSTANCE hInstance)
 		unsigned windowstyle = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
 		int xpos = CW_USEDEFAULT;
 		int ypos = CW_USEDEFAULT;
-		unsigned width = 800;
-		unsigned height = 600;
+		unsigned width = 1200;
+		unsigned height = 800;
 
 		RECT r;
 		SetRect(&r, 0, 0, width, height);
@@ -56,6 +58,10 @@ bool Application::Init(HINSTANCE hInstance)
 	set_array(keystate, false);
 	set_array(mouse_state, false);
 	show_debug_plane = false;
+
+	paused = false;
+	single_frame_mode = false;
+	do_single_renderer = false;
 
 	return true;
 }
@@ -85,7 +91,11 @@ void Application::Run()
 		lasttime = newtime;
 
 		updateSimulation(static_cast<float>(diff) / 1000.f);
-		render();
+		if (!single_frame_mode || do_single_renderer)
+		{
+			do_single_renderer = false;
+			render();
+		}
 	}
 }
 
@@ -140,7 +150,7 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 		// for movement
 		keystate[static_cast<char>(LOWORD(wParam))] = true;
 
-		if (keystate[VK_CONTROL]) // ctrl events
+		if (GetKeyState(VK_CONTROL) < 0) // ctrl events
 		{
 			switch (LOWORD(wParam))
 			{
@@ -162,6 +172,15 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 			{
 			case VK_ESCAPE: // quit
 				PostQuitMessage(0);
+				break;
+			case 'P': // pause
+				paused ^= true;
+				break;
+			case 'O': // single frame mode
+				single_frame_mode ^= true;
+				break;
+			case 'I': // render single frame
+				do_single_renderer = true;
 				break;
 			}
 		}
@@ -251,7 +270,7 @@ bool Application::initGraphics()
 	scroll_pos3 = 0.f;
 
 	// default scene
-	includer.setSubstitutions({ {"sdf_scene.hlsl", "scenes/sdf_scene_lense.hlsl"} });
+	includer.setSubstitutions({ {"sdf_scene.hlsl", "scenes/sdf_scene_cube2.hlsl"} });
 	initShader();
 
 	return true;
@@ -269,6 +288,8 @@ void Application::initShader()
 	hdr.initShader(includer);
 
 	variable_manager.createControls();
+
+	do_single_renderer = true; // after a shader refresh, render one frame as preview
 }
 
 void Application::render()
@@ -276,13 +297,15 @@ void Application::render()
 	if (profiler.fetchResults())
 	{
 		auto results = profiler.getResults();
-		/*OutputDebugString("======================\n");
+#ifdef PROFILE_OUTPUT
+		OutputDebugString("======================\n");
 		for (auto &elem : results)
 		{
 			std::string name = elem.first.empty() ? "Total" : elem.first;
 			std::string msg = Format() << name << ": " << elem.second * 1000.f << "ms\n";
 			OutputDebugString(msg.c_str());
-		}*/
+		}
+#endif
 	}
 
 	SDFRenderer::DebugPlane debug_plane;
@@ -339,7 +362,10 @@ void Application::render()
 
 void Application::updateSimulation(float dt)
 {
-	stime += dt;
+	if (!paused)
+	{
+		stime += dt;
+	}
 	float speed = 2.f;
 
 	Vector3 move = Vector3::NullVector();
