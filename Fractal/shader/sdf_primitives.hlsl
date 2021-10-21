@@ -14,13 +14,6 @@ float sdBox(float3 pos, float3 size)
 	return length(max(q, 0.f)) + min(max(q.x, max(q.y, q.z)), 0.f);
 }
 
-// TODO: output an "extra distance" which is a fast step towards the box based on the exact distance
-float sdBoxFast(float3 pos, float3 dir, float3 size)
-{
-	float3 q = abs(pos) - size;
-	return length(max(q, 0.f)) + min(max(q.x, max(q.y, q.z)), 0.f);
-}
-
 float sdPlane(float3 pos, float3 plane_norm)
 {
 	return dot(pos, plane_norm);
@@ -76,4 +69,29 @@ float sdRoundCone(float3 p, float3 a, float3 b, float r1, float r2)
 	if (sign(z) * a2 * z2 > k) return  sqrt(x2 + z2) * il2 - r2;
 	if (sign(y) * a2 * y2 < k) return  sqrt(x2 + y2) * il2 - r1;
 	return (sqrt(x2 * a2 * il2) + y * rr) * il2 - r1;
+}
+
+// a guard object, limits the ray to inside a 1/2/3-D box
+float sdLimit1(float pos, float dir, float lim_val)
+{
+	float barrier_to_use = step(0.f, dir) - 0.5f;
+	float barrier_pos = barrier_to_use * lim_val - pos;
+	float t = barrier_pos / dir;
+	return t;
+}
+
+float sdLimit2(float2 pos, float2 dir, float2 lim_val)
+{
+	float2 barrier_to_use = step(0.f, dir) - 0.5f;
+	float2 barrier_pos = barrier_to_use * lim_val - pos;
+	float2 t = barrier_pos / dir;
+	return min(t.x, t.y);
+}
+
+float sdLimit3(float3 pos, float3 dir, float3 lim_val)
+{
+	float3 barrier_to_use = step(0.f, dir) - 0.5f;
+	float3 barrier_pos = barrier_to_use * lim_val - pos;
+	float3 t = barrier_pos / dir;
+	return min(min(t.x, t.y), t.z);
 }

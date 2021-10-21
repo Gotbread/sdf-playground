@@ -9,6 +9,18 @@ struct GeometryInput
 	// xyz: the direction of the ray, if directional
 	float3 dir;
 
+	// the euclidean distance from the eye
+	float camera_distance;
+
+	// points to the pixel right of this one, per unit of eye distance
+	float3 right_ray_offset;
+
+	// points to the pixel below this one, per unit of eye distance
+	float3 bottom_ray_offset;
+};
+
+struct MarchingInput
+{
 	// if true, we are just marching along a ray and can use fast methods if available
 	// the "dir" member will be valid if this is set
 	bool use_fast;
@@ -22,15 +34,6 @@ struct GeometryInput
 
 	// if last_transparent_pos is valid
 	bool has_transparent;
-
-	// the euclidean distance from the eye
-	float camera_distance;
-
-	// points to the pixel right of this one, per unit of eye distance
-	float3 right_ray_offset;
-
-	// points to the pixel below this one, per unit of eye distance
-	float3 bottom_ray_offset;
 };
 
 struct NormalOutput
@@ -50,26 +53,14 @@ struct NormalOutput
 
 struct MaterialInput
 {
-	// the position in 3D worldspace
-	float3 pos;
-
 	// the normal of the object
 	float3 obj_normal;
 
 	// how many iterations we did to get here
 	uint iteration_count;
 
-	// the euclidean distance from the eye
-	float camera_distance;
-
 	// the last distance to the scene
 	float scene_distance;
-
-	// points to the pixel right of this one, per unit of eye distance
-	float3 right_ray_offset;
-
-	// points to the pixel below this one, per unit of eye distance
-	float3 bottom_ray_offset;
 };
 
 struct MaterialOutput
@@ -110,6 +101,9 @@ struct MaterialOutput
 	// xyz: output normal, if any
 	// w: blend factor between the old normal and this. 1 means use this, 0 means use existing one
 	float4 normal;
+
+	// how deep the rays we can launch from this
+	uint max_cost;
 };
 
 struct LightInput

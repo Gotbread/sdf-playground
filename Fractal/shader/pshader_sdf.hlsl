@@ -32,11 +32,12 @@ cbuffer camera : register(b0)
 static const float dist_eps = 0.0001f;    // how close to the object before terminating
 static const float grad_eps = 0.0001f;    // how far to move when computing the gradient
 static const float reflect_eps = 0.001f;  // how far to move the ray along after a reflection
+static const float refract_eps = 0.001f;  // how far to move the ray along after a refraction
 static const float shadow_eps = 0.0003f;   // how far to step along the light ray when looking for occluders
 static const float max_dist_check = 1e30; // maximum practical number
 
-static const float3 lighting_dir = normalize(float3(-1.f, -2.f, 1.5f));
-static const float ambient_lighting_factor = 0.05f;
+static const float3 lighting_dir = normalize(float3(-0.5f, -2.f, 1.75f));
+static const float ambient_lighting_factor = 0.1f;
 
 /*
 float3 debug_plane_color(float scene_distance)
@@ -66,100 +67,6 @@ float2 map_debug(float3 p, float3 dir, out float3 material_property)
 	{
 		return distance_scene;
 	}
-}
-
-float3 grad(float3 p, float baseline, float transparency)
-{
-	float3 unused;
-	float d1 = map(float4(p - float3(grad_eps, 0.f, 0.f), transparency), float3(0.f, 0.f, 0.f), unused).x - baseline;
-	float d2 = map(float4(p - float3(0.f, grad_eps, 0.f), transparency), float3(0.f, 0.f, 0.f), unused).x - baseline;
-	float d3 = map(float4(p - float3(0.f, 0.f, grad_eps), transparency), float3(0.f, 0.f, 0.f), unused).x - baseline;
-	return normalize(float3(d1, d2, d3));
-}
-
-// true if it hit something
-// hit_info.x = material_id
-// hit_info.y = iter count
-// hit_info.z = scene distance
-// hit_info.w = total distance
-bool raymarch_scene_transparent(inout float3 pos, float3 dir, float max_dist, out float4 hit_info, out float3 material_property)
-{
-	float total_dist = 0.f;
-	for (uint iter = 0; iter < 100; ++iter)
-	{
-		float2 scene_distance = map_debug(pos, dir, material_property);
-		total_dist += scene_distance.x;
-		if (scene_distance.x < dist_eps)
-		{
-			hit_info.x = scene_distance.y;
-			hit_info.y = (float)iter;
-			hit_info.z = scene_distance.x;
-			hit_info.w = total_dist;
-			return true;
-		}
-		else if (total_dist > max_dist)
-		{
-			return false;
-		}
-		pos += dir * scene_distance.x;
-	}
-	return false;
-}
-
-// true if it hit something
-// hit_info.x = material_id
-// hit_info.y = iter count
-// hit_info.z = scene distance
-// hit_info.w = total distance
-bool raymarch_scene_opaque(inout float3 pos, float3 dir, float max_dist, out float4 hit_info, out float3 material_property)
-{
-	float total_dist = 0.f;
-	for (uint iter = 0; iter < 100; ++iter)
-	{
-		float2 scene_distance = map(float4(pos, 0.f), dir, material_property);
-		total_dist += scene_distance.x;
-		if (scene_distance.x < dist_eps)
-		{
-			hit_info.x = scene_distance.y;
-			hit_info.y = (float)iter;
-			hit_info.z = scene_distance.x;
-			hit_info.w = total_dist;
-			return true;
-		}
-		else if (total_dist > max_dist)
-		{
-			return false;
-		}
-		pos += dir * scene_distance.x;
-	}
-	return false;
-}
-
-// tests if we can reach a target
-// scene_rel_distance = how close we ever came to other scene objects
-// relative to the distance traveled. if this value is close to one, we were
-// mostly unobstructed
-bool raymarch_scene_obstruction(float3 pos, float3 dir, float max_dist, out float scene_rel_distance)
-{
-	scene_rel_distance = 1.f;
-	float total_dist = 0.f;
-	for (uint iter = 0; iter < 100; ++iter)
-	{
-		float3 material_property;
-		float2 scene_distance = map(float4(pos, 0.f), dir, material_property);
-		total_dist += scene_distance.x;
-		scene_rel_distance = min(scene_rel_distance, scene_distance.x / total_dist);
-		if (scene_distance.x < dist_eps)
-		{
-			return true;
-		}
-		else if (total_dist > max_dist)
-		{
-			return false;
-		}
-		pos += dir * scene_distance.x;
-	}
-	return true;
 }
 
 float4 colorize(float3 pos, float3 dir, float scene_distance, float iter_count, float material_id, float3 material_property)
@@ -254,27 +161,6 @@ float4 colorize(float3 pos, float3 dir, float scene_distance, float iter_count, 
 	return float4(color_multiplier * (col + extra_color), 1.f);
 }*/
 
-/*
-void ps_main(ps_input input, out ps_output output)
-{
-	// calculate main ray
-	float3 dir = normalize(front_vec + input.screenpos.x * right_vec + input.screenpos.y * top_vec);
-	float3 right_pix_vec = ddx(input.screenpos.x) * right_vec;
-	float3 down_pix_vec = ddy(input.screenpos.y) * top_vec;
-
-	// march it
-	float3 pos = eye;
-	float4 col = float4(0.1f, 0.1f, 0.f, 1.f);
-	float4 hit_info;
-	float3 material_property;
-	if (raymarch_scene_transparent(pos, dir, max_dist_check, hit_info, material_property))
-	{
-		col = colorize(pos, dir, hit_info.z, hit_info.y, hit_info.x, material_property);
-	}
-
-	output.color = col;
-}*/
-
 struct Ray
 {
 	float3 pos;
@@ -297,26 +183,47 @@ struct Ray
 #define MATERIAL_NORMAL 2
 #define MATERIAL_WOOD 20
 
+// makros for convenience
+#define OBJECT(distance) output_scene_distance = min(output_scene_distance, distance)
+#define MATERIAL(distance) (abs(distance) < dist_eps)
+
 #include "sdf_scene.hlsl"
 
-float3 grad(GeometryInput geometry, float baseline, float sample_distance)
+float map_geometry(GeometryInput geometry, MarchingInput march)
+{
+	float output_scene_distance = 3e38;
+
+	MaterialInput material_input = (MaterialInput)0;
+	MaterialOutput material_output = (MaterialOutput)0;
+
+	map(geometry, march, material_input, material_output, true, output_scene_distance);
+
+	return output_scene_distance;
+}
+
+void map_material(GeometryInput geometry, MaterialInput material_input, inout MaterialOutput material_output)
+{
+	float dummy = 0.f;
+	MarchingInput march = (MarchingInput)0;
+	map(geometry, march, material_input, material_output, false, dummy);
+}
+
+float3 grad(GeometryInput geometry, MarchingInput march, float baseline, float sample_distance)
 {
 	float3 offset = float3(sample_distance, 0.f, 0.f);
 	float3 pos = geometry.pos;
 
-	geometry.use_fast = false;
-
 	geometry.pos = pos + offset.xyz;
-	float d1 = map_geometry(geometry) - baseline;
+	float d1 = map_geometry(geometry, march) - baseline;
 	geometry.pos = pos + offset.zxy;
-	float d2 = map_geometry(geometry) - baseline;
+	float d2 = map_geometry(geometry, march) - baseline;
 	geometry.pos = pos + offset.yzx;
-	float d3 = map_geometry(geometry) - baseline;
+	float d3 = map_geometry(geometry, march) - baseline;
 
 	return normalize(float3(d1, d2, d3));
 }
 
-bool march_ray(inout GeometryInput geometry, float dist_max, float inside_sign, out uint iter, out float scene_distance)
+bool march_ray(inout GeometryInput geometry, MarchingInput march, float dist_max, float inside_sign, out uint iter, out float scene_distance)
 {
 	float3 start_pos = geometry.pos;
 	// TODO fast stepping
@@ -332,7 +239,7 @@ bool march_ray(inout GeometryInput geometry, float dist_max, float inside_sign, 
 		}
 
 		geometry.pos = start_pos + geometry.dir * geometry.camera_distance;
-		scene_distance = map_geometry(geometry) * inside_sign;
+		scene_distance = map_geometry(geometry, march) * inside_sign;
 		// check for overstepping
 		if (step_factor > 1.f && (last_scene_distance + scene_distance) < last_scene_distance * step_factor)
 		{
@@ -388,9 +295,11 @@ uint find_free_ray(Ray rays[RAY_COUNT])
 void ps_main(ps_input input, out ps_output output)
 {
 	// calculate main ray
-	float3 dir = normalize(front_vec + input.screenpos.x * right_vec + input.screenpos.y * top_vec);
-	float3 right_ray_vec = ddx(input.screenpos.x) * right_vec;
-	float3 bottom_ray_vec = ddy(input.screenpos.y) * top_vec;
+	float3 dir = front_vec + input.screenpos.x * right_vec + input.screenpos.y * top_vec;
+	float dir_invlen = 1.f / length(dir);
+	dir *= dir_invlen;
+	float3 right_ray_vec = ddx(input.screenpos.x) * right_vec * dir_invlen;
+	float3 bottom_ray_vec = ddy(input.screenpos.y) * top_vec * dir_invlen;
 
 	Ray rays[RAY_COUNT];
 	for (uint index = 1; index < RAY_COUNT; ++index)
@@ -424,16 +333,18 @@ void ps_main(ps_input input, out ps_output output)
 		GeometryInput geometry_input;
 		geometry_input.pos = rays[ray_index].pos;
 		geometry_input.dir = rays[ray_index].dir;
-		geometry_input.use_fast = true;
-		geometry_input.is_inside = false;
-		geometry_input.has_transparent = false;
-		geometry_input.last_transparent_pos = float3(0.f, 0.f, 0.f);
 		geometry_input.right_ray_offset = right_ray_vec;
 		geometry_input.bottom_ray_offset = bottom_ray_vec;
 
+		MarchingInput marching_input;
+		marching_input.use_fast = true;
+		marching_input.is_inside = false;
+		marching_input.has_transparent = false;
+		marching_input.last_transparent_pos = float3(0.f, 0.f, 0.f);
+
 		uint iter_count;
 		float scene_distance;
-		if (march_ray(geometry_input, 100.f, inside_sign, iter_count, scene_distance))
+		if (march_ray(geometry_input, marching_input, 100.f, inside_sign, iter_count, scene_distance))
 		{
 			// calculate the normal, first pass
 			NormalOutput normal_output;
@@ -441,23 +352,19 @@ void ps_main(ps_input input, out ps_output output)
 			normal_output.normal = float3(0.f, 0.f, 0.f);
 			normal_output.normal_sample_dist = grad_eps;
 
-			geometry_input.use_fast = false;
+			marching_input.use_fast = false;
 			map_normal(geometry_input, normal_output);
 			if (!normal_output.use_normal)
 			{
-				normal_output.normal = grad(geometry_input, scene_distance * inside_sign, normal_output.normal_sample_dist);
+				normal_output.normal = grad(geometry_input, marching_input, scene_distance * inside_sign, normal_output.normal_sample_dist);
 			}
-			geometry_input.use_fast = true;
+			marching_input.use_fast = true;
 
 			// get the material
 			MaterialInput material_input;
-			material_input.pos = geometry_input.pos;
 			material_input.obj_normal = normal_output.normal;
 			material_input.iteration_count = iter_count;
-			material_input.camera_distance = geometry_input.camera_distance;
 			material_input.scene_distance = scene_distance;
-			material_input.right_ray_offset = right_ray_vec;
-			material_input.bottom_ray_offset = bottom_ray_vec;
 
 			MaterialOutput material_output;
 			material_output.material_id = 0;
@@ -471,14 +378,15 @@ void ps_main(ps_input input, out ps_output output)
 			material_output.optical_index = 1.4f;
 			material_output.optical_density = 0.f;
 			material_output.normal = float4(0.f, 0.f, 0.f, 0.f);
+			material_output.max_cost = 7;
 
-			map_material(material_input, material_output);
+			map_material(geometry_input, material_input, material_output);
 			
 			// get the new normal
 			float3 new_normal = lerp(normal_output.normal, material_output.normal.xyz, material_output.normal.w);
 
 			// do we have reflection?
-			if (any(material_output.reflection_color) && inside_sign > 0.f) // only if we are an outside ray
+			if (any(material_output.reflection_color) && inside_sign > 0.f && current_ray_depth + 3 < material_output.max_cost) // only if we are an outside ray
 			{
 				if (ray_count < RAY_COUNT)
 				{
@@ -497,7 +405,7 @@ void ps_main(ps_input input, out ps_output output)
 			}
 
 			// do we have refraction?
-			if (any(material_output.refraction_color))
+			if (any(material_output.refraction_color) && current_ray_depth + 4 < material_output.max_cost)
 			{
 				if (ray_count < RAY_COUNT)
 				{
@@ -508,7 +416,7 @@ void ps_main(ps_input input, out ps_output output)
 						float3 ref_vec = refract(geometry_input.dir, new_normal, 1.f / material_output.optical_index);
 						// start a new ray
 
-						rays[new_ray_index].pos = geometry_input.pos + ref_vec * reflect_eps;
+						rays[new_ray_index].pos = geometry_input.pos + ref_vec * refract_eps;
 						rays[new_ray_index].dir = ref_vec;
 						rays[new_ray_index].contribution = material_output.refraction_color * ray_contribution;
 						rays[new_ray_index].inside_sign = -1.f;
@@ -519,7 +427,7 @@ void ps_main(ps_input input, out ps_output output)
 						float3 ref_vec = refract(geometry_input.dir, -new_normal, material_output.optical_index);
 						// start a new ray
 
-						rays[new_ray_index].pos = geometry_input.pos + ref_vec * reflect_eps;
+						rays[new_ray_index].pos = geometry_input.pos + ref_vec * refract_eps;
 						rays[new_ray_index].dir = ref_vec;
 						rays[new_ray_index].contribution = material_output.refraction_color * ray_contribution;
 						rays[new_ray_index].inside_sign = 1.f;
@@ -532,7 +440,7 @@ void ps_main(ps_input input, out ps_output output)
 			float3 color = float3(0.f, 0.f, 0.f);
 			float3 material_color = float3(0.f, 0.f, 0.f);
 
-			float3 lighting_dir = normalize(float3(-3.f, -1.f, 1.f));
+			float3 lighting_dir = normalize(float3(-0.2f, -2.f, 0.2f));
 			float light_dot = saturate(dot(-new_normal, lighting_dir));
 
 			// handle material
@@ -555,7 +463,7 @@ void ps_main(ps_input input, out ps_output output)
 			geometry_input.dir = -lighting_dir;
 			uint iter_count_unused;
 			float scene_distance_unused;
-			bool obstructed = march_ray(geometry_input, 100.f, inside_sign, iter_count_unused, scene_distance_unused);
+			bool obstructed = march_ray(geometry_input, marching_input, 100.f, inside_sign, iter_count_unused, scene_distance_unused);
 			if (obstructed)
 			{
 				diffuse_color = 0.f;
@@ -574,13 +482,7 @@ void ps_main(ps_input input, out ps_output output)
 		}
 		else
 		{
-			float3 dir = geometry_input.dir;
-			float noiseval = turbulence(dir * float3(1.f, 6.f, 1.f) * 2.5f);
-			float3 color1 = float3(43.f, 164.f, 247.f) / 255.f;
-			float3 color2 = float3(212.f, 224.f, 238.f) / 255.f;
-			float3 sky_color = lerp(color1, color2, noiseval) * 1.2f;
-			float3 horizon_color = float3(0.25f, 0.25f, 0.25f);
-			float3 background_color = lerp(horizon_color, sky_color, saturate(dir.y * 3.f));
+			float3 background_color = map_background(geometry_input.dir, iter_count);
 			output.color.rgb += background_color * ray_contribution;
 		}
 		// keep track of closest point relative to camera distance -> antialiasing
