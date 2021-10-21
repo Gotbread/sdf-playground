@@ -36,7 +36,7 @@ static const float refract_eps = 0.001f;  // how far to move the ray along after
 static const float shadow_eps = 0.0003f;   // how far to step along the light ray when looking for occluders
 static const float max_dist_check = 1e30; // maximum practical number
 
-static const float3 lighting_dir = normalize(float3(-0.5f, -2.f, 1.75f));
+static const float3 lighting_dir = normalize(float3(-0.5f, -1.f, 1.75f));
 static const float ambient_lighting_factor = 0.1f;
 
 /*
@@ -440,7 +440,6 @@ void ps_main(ps_input input, out ps_output output)
 			float3 color = float3(0.f, 0.f, 0.f);
 			float3 material_color = float3(0.f, 0.f, 0.f);
 
-			float3 lighting_dir = normalize(float3(-0.2f, -2.f, 0.2f));
 			float light_dot = saturate(dot(-new_normal, lighting_dir));
 
 			// handle material

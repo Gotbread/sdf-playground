@@ -10,6 +10,11 @@ uint hash(uint input)
 	return (word >> 22u) ^ word;
 }
 
+float hashf(uint input)
+{
+	return ((float)hash(input)) / ((float)((uint)-1));
+}
+
 
 /*
 
