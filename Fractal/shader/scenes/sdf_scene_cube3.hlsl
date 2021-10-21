@@ -89,7 +89,7 @@ void map(GeometryInput geometry, MarchingInput march, MaterialInput material_inp
 			float grey = step(-1.f, pattern.z) * (cos(pattern.z * 50.f) * 0.5f + 0.5f);
 			float3 color = grey * grey;
 
-			material_output.diffuse_color = float4(color, 1.f);
+			material_output.diffuse_color = float4(color * 0.8f, 1.f);
 		}
 		else if (MATERIAL(cable))
 		{
@@ -104,7 +104,7 @@ void map(GeometryInput geometry, MarchingInput march, MaterialInput material_inp
 			float grey = step(-1.f, pattern.z) * (cos(pattern.z * 50.f) * 0.5f + 0.5f);
 			float3 color = grey * grey;
 
-			material_output.diffuse_color = float4(color, 1.f);
+			material_output.diffuse_color = float4(color * 0.9f, 1.f);
 		}
 		else if (MATERIAL(floor1))
 		{
@@ -136,8 +136,11 @@ void map_normal(GeometryInput input, inout NormalOutput output)
 {
 }
 
-void map_light(LightInput input, inout LightOutput output)
+void map_light(GeometryInput input, inout LightOutput output[LIGHT_COUNT], inout float ambient_lighting_factor)
 {
+	output[0].used = true;
+	output[0].pos = float4(-1.f, -1.f, 2.f, 1.f);
+	output[0].color = float3(1.f, 1.2f, 1.f);
 }
 
 float3 map_background(float3 dir, uint iter_count)

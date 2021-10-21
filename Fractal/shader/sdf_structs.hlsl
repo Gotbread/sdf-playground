@@ -106,22 +106,18 @@ struct MaterialOutput
 	uint max_cost;
 };
 
-struct LightInput
-{
-	// the position in 3D worldspace
-	float3 pos;
-
-	// the euclidean distance from the eye
-	float camera_distance;
-};
-
 struct LightOutput
 {
 	// whether this light source is used. preloaded with false
 	bool used;
 
 	// where is the source
-	float3 pos;
+	// if w is 0, its a position vector of the light. if w is 1, its treated as a directional light
+	float4 pos;
+
+	// how big the light source around the point is. this is used to cut the raymarcher short during
+	// the shadow finding phase. preloaded with 0.f
+	float extend;
 
 	// what color does it have
 	float3 color;

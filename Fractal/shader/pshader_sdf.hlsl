@@ -37,7 +37,6 @@ static const float shadow_eps = 0.0003f;   // how far to step along the light ra
 static const float max_dist_check = 1e30; // maximum practical number
 
 static const float3 lighting_dir = normalize(float3(-0.5f, -1.f, 1.75f));
-static const float ambient_lighting_factor = 0.1f;
 
 /*
 float3 debug_plane_color(float scene_distance)
@@ -371,7 +370,7 @@ void ps_main(ps_input input, out ps_output output)
 			material_output.material_position = float4(geometry_input.pos, 0.f);
 			material_output.material_properties = float4(0.f, 0.f, 0.f, 0.f);
 			material_output.diffuse_color = float4(0.f, 0.f, 0.f, 1.f);
-			material_output.specular_color = float4(0.f, 0.f, 0.f, 12.f);
+			material_output.specular_color = float4(0.f, 0.f, 0.f, 48.f);
 			material_output.emissive_color = float3(0.f, 0.f, 0.f);
 			material_output.reflection_color = float3(0.f, 0.f, 0.f); // no reflection
 			material_output.refraction_color = float3(0.f, 0.f, 0.f); // no refraction
@@ -437,42 +436,76 @@ void ps_main(ps_input input, out ps_output output)
 				}
 			}
 
+			float3 diffuse_color = material_output.diffuse_color.rgb;
 			float3 color = float3(0.f, 0.f, 0.f);
-			float3 material_color = float3(0.f, 0.f, 0.f);
-
-			float light_dot = saturate(dot(-new_normal, lighting_dir));
 
 			// handle material
 			if (material_output.material_id == MATERIAL_WOOD)
 			{
-				material_color = wood(material_output.material_position.xyz);
+				diffuse_color += wood(material_output.material_position.xyz);
 			}
 
-			// handle diffuse color
-			float3 diffuse_color = material_output.diffuse_color.rgb * (light_dot + ambient_lighting_factor);
-
-			float3 specular_ref = reflect(lighting_dir, new_normal);
-			float specular_shading = pow(saturate(dot(specular_ref, -geometry_input.dir)), material_output.specular_color.a);
-
-			// handle specular color
-			float3 specular_color = material_output.specular_color.rgb * specular_shading;
-
-			// handle shadow
-			geometry_input.pos += new_normal * shadow_eps;
-			geometry_input.dir = -lighting_dir;
-			uint iter_count_unused;
-			float scene_distance_unused;
-			bool obstructed = march_ray(geometry_input, marching_input, 100.f, inside_sign, iter_count_unused, scene_distance_unused);
-			if (obstructed)
+			LightOutput light_output[LIGHT_COUNT];
+			for (uint i1 = 0; i1 < LIGHT_COUNT; ++i1)
 			{
-				diffuse_color = 0.f;
-				specular_color = 0.f;
-				material_color = 0.f;
+				light_output[i1].used = false;
+				light_output[i1].pos = float4(0.f, 0.f, 0.f, 0.f);
+				light_output[i1].color = float3(0.f, 0.f, 0.f);
+				light_output[i1].falloff = 0.f;
+				light_output[i1].extend = 0.f;
 			}
 
-			color += diffuse_color;
-			color += specular_color;
-			color += material_color;
+			float ambient_lighting_factor = 0.075f;
+			map_light(geometry_input, light_output, ambient_lighting_factor);
+
+			// adjust for shadow eps
+			float3 view_dir = geometry_input.dir;
+			geometry_input.pos += new_normal * shadow_eps;
+
+			// handle all lights
+			for (uint i2 = 0; i2 < LIGHT_COUNT; ++i2)
+			{
+				if (light_output[i2].used)
+				{
+					// get light dir
+					float3 lighting_dir;
+					float distance_to_trace;
+					if (light_output[i2].pos.w == 1.f)
+					{
+						lighting_dir = light_output[i2].pos.xyz;
+						lighting_dir /= length(lighting_dir) + dist_eps;
+						distance_to_trace = 100.f; // reasonable default
+					}
+					else
+					{
+						lighting_dir = geometry_input.pos - light_output[i2].pos.xyz;
+						distance_to_trace = length(lighting_dir);
+						lighting_dir /= distance_to_trace;
+						distance_to_trace -= light_output[i2].extend;
+					}
+
+					// handle the shadow first
+					geometry_input.dir = -lighting_dir;
+					uint iter_count_unused;
+					float scene_distance_unused;
+					bool obstructed = march_ray(geometry_input, marching_input, distance_to_trace, inside_sign, iter_count_unused, scene_distance_unused);
+					if (!obstructed)
+					{
+						// handle diffuse color
+						float light_dot = saturate(dot(-new_normal, lighting_dir));
+						float diffuse_factor = (light_dot + ambient_lighting_factor);
+
+						color += diffuse_color.rgb * light_output[i2].color * diffuse_factor;
+
+						// handle specular
+						float3 half_vec = -normalize(view_dir + lighting_dir);
+						float specular_dot = saturate(dot(new_normal, half_vec));
+						float specular_factor = pow(specular_dot, material_output.specular_color.a);
+
+						color += material_output.specular_color.rgb * light_output[i2].color * specular_factor;
+					}
+				}
+			}
 
 			// handle emissive color
 			color += material_output.emissive_color.rgb;
