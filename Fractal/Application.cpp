@@ -55,8 +55,6 @@ bool Application::Init(HINSTANCE hInstance)
 		return false;
 	}
 
-	set_array(keystate, false);
-	set_array(mouse_state, false);
 	show_debug_plane = false;
 
 	paused = false;
@@ -115,41 +113,36 @@ LRESULT CALLBACK Application::sWndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARA
 
 LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 {
+	input_manager.processMessage(Msg, wParam, lParam);
+
 	switch (Msg)
 	{
 	case WM_MOUSEMOVE:
 		{
-			int xdiff = LOWORD(lParam) - lastmouse.x;
-			int ydiff = HIWORD(lParam) - lastmouse.y;
-			if (mouse_state[MouseButton::Left])
+			if (auto motion = input_manager.getMotion(); motion)
 			{
-				if (xdiff || ydiff)
+				if (input_manager.getMouseState(InputManager::MouseButton::Left))
 				{
-					camera.RotateY(xdiff / -500.f);
-					camera.RotateX(ydiff / -500.f);
+					camera.RotateY(motion->x / -500.f);
+					camera.RotateX(motion->y / -500.f);
+				}
+				if (input_manager.getMouseState(InputManager::MouseButton::Middle))
+				{
+					scroll_pos1 += motion->x / 1000.f;
+					scroll_pos1 = std::min(std::max(scroll_pos1, -1.f), +1.f);
+
+					scroll_pos2 += motion->y / 1000.f;
+					scroll_pos2 = std::min(std::max(scroll_pos2, -10.f), +10.f);
+				}
+				if (input_manager.getMouseState(InputManager::MouseButton::Right))
+				{
+					scroll_pos3 += motion->x / 1000.f;
+					scroll_pos3 = std::min(std::max(scroll_pos3, 0.f), 1.f);
 				}
 			}
-			if (mouse_state[MouseButton::Middle])
-			{
-				scroll_pos1 += xdiff / 1000.f;
-				scroll_pos1 = std::min(std::max(scroll_pos1, -1.f), +1.f);
-
-				scroll_pos2 += ydiff / 1000.f;
-				scroll_pos2 = std::min(std::max(scroll_pos2, -10.f), +10.f);
-			}
-			if (mouse_state[MouseButton::Right])
-			{
-				scroll_pos3 += xdiff / 1000.f;
-				scroll_pos3 = std::min(std::max(scroll_pos3, 0.f), 1.f);
-			}
-			lastmouse.x = LOWORD(lParam);
-			lastmouse.y = HIWORD(lParam);
 		}
 		break;
 	case WM_KEYDOWN:
-		// for movement
-		keystate[static_cast<char>(LOWORD(wParam))] = true;
-
 		if (GetKeyState(VK_CONTROL) < 0) // ctrl events
 		{
 			switch (LOWORD(wParam))
@@ -185,27 +178,8 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 			}
 		}
 		break;
-	case WM_KEYUP:
-		keystate[static_cast<char>(LOWORD(wParam))] = false;
-		break;
-	case WM_LBUTTONDOWN:
-		mouse_state[MouseButton::Left] = true;
-		break;
-	case WM_LBUTTONUP:
-		mouse_state[MouseButton::Left] = false;
-		break;
 	case WM_MBUTTONDOWN:
-		mouse_state[MouseButton::Middle] = true;
 		show_debug_plane ^= true;
-		break;
-	case WM_MBUTTONUP:
-		mouse_state[MouseButton::Middle] = false;
-		break;
-	case WM_RBUTTONDOWN:
-		mouse_state[MouseButton::Right] = true;
-		break;
-	case WM_RBUTTONUP:
-		mouse_state[MouseButton::Right] = false;
 		break;
 	case WM_DESTROY:
 		PostQuitMessage(0);
@@ -270,7 +244,7 @@ bool Application::initGraphics()
 	scroll_pos3 = 0.f;
 
 	// default scene
-	includer.setSubstitutions({ {"sdf_scene.hlsl", "scenes/sdf_scene_cube2.hlsl"} });
+	includer.setSubstitutions({ {"sdf_scene.hlsl", "scenes/sdf_scene_cube3.hlsl"} });
 	initShader();
 
 	return true;
@@ -366,37 +340,15 @@ void Application::updateSimulation(float dt)
 	{
 		stime += dt;
 	}
-	float speed = 2.f;
+	float speed = input_manager.getKeyState(VK_SHIFT) ? 5.f : 2.f;
 
 	Vector3 move = Vector3::NullVector();
-	if (keystate['W'])
-	{
-		move += Vector3(0.f, 0.f, +1.f);
-	}
-	if (keystate['S'])
-	{
-		move += Vector3(0.f, 0.f, -1.f);
-	}
-	if (keystate['A'])
-	{
-		move += Vector3(-1.f, 0.f, 0.f);
-	}
-	if (keystate['D'])
-	{
-		move += Vector3(+1.f, 0.f, 0.f);
-	}
-	if (keystate['Q'])
-	{
-		move += Vector3(0.f, +1.f, 0.f);
-	}
-	if (keystate['E'])
-	{
-		move += Vector3(0.f, -1.f, 0.f);
-	}
-	if (keystate[VK_SHIFT])
-	{
-		speed = 5.f;
-	}
+	move += Vector3(+1.f, 0.f, 0.f) * input_manager.getKeyStateAsFloat('D');
+	move += Vector3(-1.f, 0.f, 0.f) * input_manager.getKeyStateAsFloat('A');
+	move += Vector3(0.f, +1.f, 0.f) * input_manager.getKeyStateAsFloat('Q');
+	move += Vector3(0.f, -1.f, 0.f) * input_manager.getKeyStateAsFloat('E');
+	move += Vector3(0.f, 0.f, +1.f) * input_manager.getKeyStateAsFloat('W');
+	move += Vector3(0.f, 0.f, -1.f) * input_manager.getKeyStateAsFloat('S');
 
 	camera.MoveRel(move * speed * dt);
 }

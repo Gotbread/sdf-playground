@@ -148,6 +148,7 @@
     <ClCompile Include="FullscreenQuad.cpp" />
     <ClCompile Include="GPUProfiler.cpp" />
     <ClCompile Include="Graphics.cpp" />
+    <ClCompile Include="InputManager.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Math3D.cpp" />
     <ClCompile Include="Postprocessing.cpp" />
@@ -165,6 +166,7 @@
     <ClInclude Include="FullscreenQuad.h" />
     <ClInclude Include="GPUProfiler.h" />
     <ClInclude Include="Graphics.h" />
+    <ClInclude Include="InputManager.h" />
     <ClInclude Include="Math3D.h" />
     <ClInclude Include="Postprocessing.h" />
     <ClInclude Include="SceneManager.h" />

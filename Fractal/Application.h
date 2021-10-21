@@ -15,6 +15,7 @@
 #include "SDFRenderer.h"
 #include "Postprocessing.h"
 #include "FullscreenQuad.h"
+#include "InputManager.h"
 
 class Application : public SceneManagerClient
 {
@@ -44,6 +45,7 @@ private:
 	SDFRenderer sdf_renderer;
 	HDR hdr;
 	GPUProfiler profiler;
+	InputManager input_manager;
 
 	Camera camera;
 	float stime;
@@ -52,15 +54,4 @@ private:
 	bool do_single_renderer;
 	float scroll_pos1, scroll_pos2, scroll_pos3;
 	bool show_debug_plane;
-
-	POINT lastmouse;
-	bool keystate[256];
-
-	enum MouseButton
-	{
-		Left = 0,
-		Middle = 1,
-		Right = 2,
-	};
-	bool mouse_state[3];
 };

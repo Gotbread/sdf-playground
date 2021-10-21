@@ -60,6 +60,9 @@
     <ClCompile Include="VariableManager.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
+    <ClCompile Include="InputManager.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Application.h">
@@ -105,6 +108,9 @@
       <Filter>Headerdateien</Filter>
     </ClInclude>
     <ClInclude Include="VariableManager.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="InputManager.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
   </ItemGroup>
