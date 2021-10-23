@@ -8,6 +8,42 @@ float sdSphere(float3 pos, float radius)
 	return length(pos) - radius;
 }
 
+float sdSphereFast(float3 pos, float4 dir, float r)
+{
+	if (any(dir.w))
+	{
+		float b = -dot(pos, dir.xyz);
+		float c = dot(pos, pos) - r * r;
+
+		float discriminant = b * b - c;
+		if (discriminant < 0.f) // no hit
+		{
+			return 1e10;
+			//return b >= 0.f ? b : 1e10;
+			// TODO: return the shortest distance to the sphere when missing the sphere
+			// for e.g. soft shadows. currently buggy
+		}
+		else // we got a hit
+		{
+			float root = sqrt(discriminant);
+			float t1 = b - root; // smaller one
+			float t2 = b + root; // bigger one
+			if (t1 < -dist_eps)
+			{
+				return t2 > 0.f ? t2 : 1e10;
+			}
+			else
+			{
+				return t1;
+			}
+		}
+	}
+	else
+	{
+		return sdSphere(pos, r);
+	}
+}
+
 float sdBox(float3 pos, float3 size)
 {
 	float3 q = abs(pos) - size;
@@ -20,13 +56,12 @@ float sdPlane(float3 pos, float3 plane_norm)
 }
 
 // TODO: find out if changing the return value is okay
-float sdPlaneFast(float3 pos, float3 dir, float3 plane_norm)
+float sdPlaneFast(float3 pos, float4 dir, float3 plane_norm)
 {
 	float plane_dist = dot(pos, plane_norm);
-	float fast_skip = dot(dir, dir);
-	if (fast_skip > 0.5f)
+	if (any(dir.w))
 	{
-		return plane_dist / (saturate(dot(dir, -plane_norm)) + 0.000000001f);
+		return plane_dist / (saturate(dot(dir.xyz, -plane_norm)) + 1e-20f);
 	}
 	else
 	{
