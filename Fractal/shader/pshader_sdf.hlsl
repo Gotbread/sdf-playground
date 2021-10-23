@@ -164,11 +164,17 @@ struct Ray
 #define RAY_COUNT 3
 #define ITER_COUNT 100
 #define LIGHT_COUNT 8
+#define RANGE 100.f
 
-#define MATERIAL_NONE 0
-#define MATERIAL_ITER 1
-#define MATERIAL_NORMAL 2
-#define MATERIAL_WOOD 20
+// numbers are somewhat arbitrary
+#define MATERIAL_NONE 0            // no material. just use the diffuse color with lighting. default case
+#define MATERIAL_PLAIN 1           // just use the diffuse color without lighting
+#define MATERIAL_ITER 2            // shows the iteration count as a heat map
+#define MATERIAL_NORMAL 3          // show the normal vector color coded
+#define MATERIAL_DISTANCE_PLANE 4  // the distance plane
+#define MATERIAL_WOOD 20           // wood. uses the material_position
+#define MATERIAL_MARBLE_DARK 21    // dark marble. uses the material_position
+#define MATERIAL_MARBLE_LIGHT 22   // light marble. uses the material position
 
 // makros for convenience
 #define OBJECT(distance) output_scene_distance = min(output_scene_distance, distance)
@@ -322,6 +328,7 @@ void ps_main(ps_input input, out ps_output output)
 	rays[0].depth = 0;
 	uint ray_count = 1;
 
+	float hdr_output = -1.f;
 	output.color = float4(0.f, 0.f, 0.f, 0.f);
 	for (uint bounce = 0; bounce < BOUNCE_COUNT; ++bounce)
 	{
@@ -389,8 +396,12 @@ void ps_main(ps_input input, out ps_output output)
 			material_output.optical_density = 0.f;
 			material_output.normal = float4(0.f, 0.f, 0.f, 0.f);
 			material_output.max_cost = 7;
+			material_output.use_hdr = true;
 
 			map_material(geometry_input, material_input, material_output);
+
+			float new_hdr = material_output.use_hdr ? 1.f : 0.f;
+			hdr_output = lerp(hdr_output, new_hdr, step(hdr_output, 0.f));
 			
 			// get the new normal
 			float3 new_normal = lerp(normal_output.normal, material_output.normal.xyz, material_output.normal.w);
@@ -450,86 +461,131 @@ void ps_main(ps_input input, out ps_output output)
 			float3 diffuse_color = material_output.diffuse_color.rgb;
 			float3 color = float3(0.f, 0.f, 0.f);
 
+			bool use_light = true;
 			// handle material
-			if (material_output.material_id == MATERIAL_WOOD)
+			if (material_output.material_id == MATERIAL_ITER)
+			{
+				color += iter_count_to_color(iter_count, ITER_COUNT - 1);
+				use_light = false;
+				hdr_output = 0.f;
+			}
+			else if (material_output.material_id == MATERIAL_PLAIN)
+			{
+				color += diffuse_color;
+				use_light = false;
+			}
+			else if (material_output.material_id == MATERIAL_NORMAL)
+			{
+				float3 normal_color = max(0.01f, new_normal);// *0.5f + 0.5f;
+				normal_color = normal_color / max(max(normal_color.r, normal_color.g), normal_color.b);
+				color += normal_color;
+				use_light = false;
+				hdr_output = 0.f;
+			}
+			else if (material_output.material_id == MATERIAL_DISTANCE_PLANE)
+			{
+				color += debug_plane_color(material_output.material_properties.x / debug_ruler_scale);
+				use_light = false;
+				hdr_output = 0.f;
+			}
+			else if (material_output.material_id == MATERIAL_WOOD)
 			{
 				diffuse_color += wood(material_output.material_position.xyz);
 			}
-
-			LightOutput light_output[LIGHT_COUNT];
-			for (uint i1 = 0; i1 < LIGHT_COUNT; ++i1)
+			else if (material_output.material_id == MATERIAL_MARBLE_DARK)
 			{
-				light_output[i1].used = false;
-				light_output[i1].pos = float4(0.f, 0.f, 0.f, 0.f);
-				light_output[i1].color = float3(0.f, 0.f, 0.f);
-				light_output[i1].falloff = 0.f;
-				light_output[i1].extend = 0.f;
+				diffuse_color += marble(material_output.material_position.xyz, float3(0.556f, 0.478f, 0.541f));
+			}
+			else if (material_output.material_id == MATERIAL_MARBLE_LIGHT)
+			{
+				diffuse_color += marble(material_output.material_position.xyz, float3(0.7f, 0.7f, 0.7f));
 			}
 
-			float ambient_lighting_factor = 0.075f;
-			map_light(geometry_input, light_output, ambient_lighting_factor);
-
-			// adjust for shadow eps
-			float3 view_dir = geometry_input.dir;
-			geometry_input.pos += new_normal * shadow_eps;
-
-			// handle all lights
-			for (uint i2 = 0; i2 < LIGHT_COUNT; ++i2)
+			if (use_light)
 			{
-				if (light_output[i2].used)
+				LightOutput light_output[LIGHT_COUNT];
+				for (uint i1 = 0; i1 < LIGHT_COUNT; ++i1)
 				{
-					// get light dir
-					float3 lighting_dir;
-					float distance_to_trace;
-					if (light_output[i2].pos.w == 1.f)
+					light_output[i1].used = false;
+					light_output[i1].pos = float4(0.f, 0.f, 0.f, 0.f);
+					light_output[i1].color = float3(0.f, 0.f, 0.f);
+					light_output[i1].falloff = 0.f;
+					light_output[i1].extend = 0.f;
+				}
+
+				float ambient_lighting_factor = 0.075f;
+				map_light(geometry_input, light_output, ambient_lighting_factor);
+
+				// adjust for shadow eps
+				float3 view_dir = geometry_input.dir.xyz;
+				float3 scene_pos = geometry_input.pos + new_normal * max(shadow_eps, normal_output.normal_sample_dist);
+
+				marching_input.is_shadow_pass = true;
+
+				// handle all lights
+				for (uint i2 = 0; i2 < LIGHT_COUNT; ++i2)
+				{
+					if (light_output[i2].used)
 					{
-						lighting_dir = light_output[i2].pos.xyz;
-						lighting_dir /= length(lighting_dir) + dist_eps;
-						distance_to_trace = 100.f; // reasonable default
-					}
-					else
-					{
-						lighting_dir = geometry_input.pos - light_output[i2].pos.xyz;
-						distance_to_trace = length(lighting_dir);
-						lighting_dir /= distance_to_trace;
-						distance_to_trace -= light_output[i2].extend;
-					}
+						// get light dir
+						float3 lighting_dir;
+						float distance_to_trace;
+						float falloff_factor = 1.f;
+						if (light_output[i2].pos.w == 1.f) // directional light
+						{
+							lighting_dir = light_output[i2].pos.xyz;
+							lighting_dir /= length(lighting_dir) + dist_eps;
+							distance_to_trace = RANGE; // reasonable default
+						}
+						else // point light
+						{
+							lighting_dir = geometry_input.pos - light_output[i2].pos.xyz;
+							distance_to_trace = length(lighting_dir);
+							lighting_dir /= distance_to_trace;
+							distance_to_trace -= light_output[i2].extend;
 
-					// handle the shadow first
-					geometry_input.dir = -lighting_dir;
-					uint iter_count_unused;
-					float scene_distance_unused;
-					bool obstructed = march_ray(geometry_input, marching_input, distance_to_trace, inside_sign, iter_count_unused, scene_distance_unused);
-					if (!obstructed)
-					{
-						// handle diffuse color
-						float light_dot = saturate(dot(-new_normal, lighting_dir));
-						float diffuse_factor = (light_dot + ambient_lighting_factor);
+							falloff_factor = pow(0.1, light_output[i2].falloff);
+						}
+						float3 light_color = light_output[i2].color * falloff_factor;
 
-						color += diffuse_color.rgb * light_output[i2].color * diffuse_factor;
+						// handle the shadow first
+						geometry_input.pos = scene_pos;
+						geometry_input.dir = float4(-lighting_dir, 1.f);
 
-						// handle specular
-						float3 half_vec = -normalize(view_dir + lighting_dir);
-						float specular_dot = saturate(dot(new_normal, half_vec));
-						float specular_factor = pow(specular_dot, material_output.specular_color.a);
+						uint iter_count_unused;
+						float scene_distance_unused;
+						bool obstructed = march_ray(geometry_input, marching_input, distance_to_trace, inside_sign, iter_count_unused, scene_distance_unused);
+						if (!obstructed)
+						{
+							// handle diffuse color
+							float light_dot = saturate(dot(-new_normal, lighting_dir));
+							color += diffuse_color.rgb * light_color * light_dot;
 
-						color += material_output.specular_color.rgb * light_output[i2].color * specular_factor;
+							// handle specular
+							float3 half_vec = -normalize(view_dir + lighting_dir);
+							float specular_dot = saturate(dot(new_normal, half_vec));
+							float specular_factor = pow(specular_dot, material_output.specular_color.a);
+
+							color += material_output.specular_color.rgb * light_color * specular_factor;
+						}
+						// handle ambient
+						color += diffuse_color.rgb * light_color * ambient_lighting_factor;
 					}
 				}
-			}
 
-			// handle emissive color
-			color += material_output.emissive_color.rgb;
+				// handle emissive color
+				color += material_output.emissive_color.rgb;
+			}
 
 			output.color.rgb += color * ray_contribution;
 		}
 		else
 		{
-			float3 background_color = map_background(geometry_input.dir, iter_count);
+			float3 background_color = map_background(geometry_input.dir.xyz, iter_count);
 			output.color.rgb += background_color * ray_contribution;
 		}
 		// keep track of closest point relative to camera distance -> antialiasing
 	}
 
-	output.color.a = 1.f; // disable HDR for debugging
+	output.color.a = hdr_output;
 }
