@@ -23,111 +23,102 @@ float4 tile_color_from_pos(float2 pos)
 	return float4(color, dist);
 }
 
-float3 random_color(float2 cell_index)
+static const float3 brightness_fac = float3(0.2126f, 0.7152f, 0.0722f);
+
+float3 HUEtoRGB(float H)
 {
-	float r = hashf((int)(cell_index.x + cell_index.y * 217.743f));
-	float g = hashf((int)(cell_index.x + cell_index.y * 217.743f + 2475.235f));
-	float b = hashf((int)(cell_index.x + cell_index.y * 217.743f + 824.213f));
-	float maxval = max(max(r, g), b);
-	return float3(r, g, b) / maxval;
+	float R = abs(H * 6 - 3) - 1;
+	float G = 2 - abs(H * 6 - 2);
+	float B = 2 - abs(H * 6 - 4);
+	return saturate(float3(R, G, B));
+}
+
+float3 HSVtoRGB(float3 HSV)
+{
+	float3 RGB = HUEtoRGB(HSV.x);
+	return ((RGB - 1) * HSV.y + 1) * HSV.z;
+}
+
+float3 color_from_index(uint index)
+{
+	float h = ((float)index) / 5.f;
+	float3 color = HSVtoRGB(float3(h, 1.f, 1.f));
+	float brightness = dot(color, brightness_fac);
+	return color / brightness;
 }
 
 void map(GeometryInput geometry, MarchingInput march, MaterialInput material_input, inout MaterialOutput material_output, bool geometry_step, inout float output_scene_distance)
 {
-	float3 cable_pos = geometry.pos - float3(+4.f, 4.f, 4.f);
-	float cable_radius = 0.1f;
+	// cubes
+	float3 cube_pos = geometry.pos;
+	cube_pos.xz = opRepLim(cube_pos.xz, float2(2.f, 2.f), float2(3.f, 3.f));
+	float cubes = sdBox(cube_pos - float3(0.f, 1.f, 0.f), 0.4f) - 0.1f;
 
-	float pane1 = sdBox(geometry.pos - float3(-4.f, 4.f, 0.f), float3(1.f, 2.f, 0.05f));
-	float pane2 = sdBox(geometry.pos - float3(+0.f, 4.f, 0.f), float3(1.f, 2.f, 0.05f));
-	float pane3 = sdBox(geometry.pos - float3(+4.f, 4.f, 0.f), float3(1.f, 2.f, 0.05f));
-	float cable = sdCappedCylinder(cable_pos, 2.f, cable_radius);
+	float time = stime * 0.25f;
+
+	float spheres[5];
+	for (uint i = 0; i < 5; ++i)
+	{
+		time += pi * 2.f / 5.f;
+		float sphere_x = cos(time * 1.f) * -5.f;
+		float sphere_y = (cos(time * 2.f) * -0.5f + 0.5f) * 2.f + 1.f;
+		float sphere_z = sin(time * 2.f) * 2.f;
+
+		spheres[i] = sdSphere(geometry.pos - float3(sphere_x, sphere_y, sphere_z), 0.2f);
+	}
 
 	// plane
 	float floor1 = sdPlaneFast(geometry.pos, geometry.dir, float3(0.f, 1.f, 0.f));
 
 	if (geometry_step)
 	{
-		OBJECT(pane1);
-		OBJECT(pane2);
-		OBJECT(pane3);
-		OBJECT(cable);
+		if (!march.is_shadow_pass)
+		{
+			OBJECT(spheres[0]);
+			OBJECT(spheres[1]);
+			OBJECT(spheres[2]);
+			OBJECT(spheres[3]);
+			OBJECT(spheres[4]);
+		}
+		OBJECT(cubes);
 		OBJECT(floor1);
 	}
 	else
 	{
-		float2 uv = geometry.pos.xy;
-		float m1 = VAR_m1(min = -1, max = 3, step = 0.1, start = 1);
-		float m2 = VAR_m2(min = -1, max = 3, step = 0.1, start = 0);
-		float width = VAR_width(min = 0.1, max = 0.5, step = 0.05, start = 0.4);
-		float run_length = VAR_run_length(min = 1, max = 10, step = 1, start = 4);
-		float run_flip = VAR_run_flip(min = 1, max = 10, step = 1, start = 2);
-
-		if (MATERIAL(pane1))
+		for (uint i = 0; i < 5; ++i)
 		{
-			float4 v = voronoi(uv * 5.f, 0.45f);
-			float3 color = v.w > 0.05f ? random_color(v.xy) * 1.1f: float3(0.25f, 0.25f, 0.25f);
-			material_output.diffuse_color = float4(color, 1.f);
-			material_output.specular_color.rgb = 0.4f;
-			material_output.specular_color.a = 20.f;
+			if (MATERIAL(spheres[i]))
+			{
+				material_output.emissive_color = color_from_index(i);
+			}
 		}
-		else if (MATERIAL(pane2))
+		if (MATERIAL(cubes))
 		{
-			float flip_chance = VAR_flip_chance(min = 0, max = 1, steps = 0.05);
-			float width = VAR_truchet_width(min = 0, max = 0.2, step = 0.01);
-
-			float2 uv_prime = opAB2UV(uv);
-			float4 truchet = truchet_band(uv_prime * 3.f, flip_chance, width, float2(0.f, -1.f));
-			float green = truchet.w < 0.f ? 0.f : sin(truchet.w * 2.f * pi * 5.f + stime * 2.f) * 0.5f + 0.5f;
-			material_output.diffuse_color = float4(0.f, green * green, 0.f, 1.f);
-		}
-		else if (MATERIAL(pane3))
-		{
-			uv = opAB2UV(uv * 5.f);
-			uv = float2(uv.x * m1 + uv.y * m2, uv.x * m2 + uv.y * m1);
-			float4 pattern = braid(uv, width, run_length, run_flip, float2(-2.f, 0.f));
-
-			float grey = step(-1.f, pattern.z) * (cos(pattern.z * 50.f) * 0.5f + 0.5f);
-			float3 color = grey * grey;
-
-			material_output.diffuse_color = float4(color * 0.8f, 1.f);
-		}
-		else if (MATERIAL(cable))
-		{
-			float angle = atan2(cable_pos.z, cable_pos.x);
-			float2 uv_round = float2(angle * cable_radius, cable_pos.y);
-
-			uv_round = opAB2UV(uv_round * 8.f);
-			uv_round = float2(uv_round.x * m1 + uv_round.y * m2, uv_round.x * m2 + uv_round.y * m1);
-
-			float4 pattern = braid(uv_round, width, run_length, run_flip, float2(-2.f, 0.f));
-
-			float grey = step(-1.f, pattern.z) * (cos(pattern.z * 50.f) * 0.5f + 0.5f);
-			float3 color = grey * grey;
-
-			material_output.diffuse_color = float4(color * 0.9f, 1.f);
+			material_output.diffuse_color.rgb = 0.65f;
+			material_output.specular_color.rgb = 0.75f;
 		}
 		else if (MATERIAL(floor1))
 		{
 			float3 offset_right = geometry.right_ray_offset * geometry.camera_distance;
 			float3 offset_bottom = geometry.bottom_ray_offset * geometry.camera_distance;
 			// ===========
-			float2 tile_pos1 = get_tile_impact(geometry.pos, geometry.dir);
+			float2 tile_pos1 = get_tile_impact(geometry.pos, geometry.dir.xyz);
 			float4 color1 = tile_color_from_pos(tile_pos1);
 
-			float2 tile_pos2 = get_tile_impact(geometry.pos + offset_right, geometry.dir);
+			float2 tile_pos2 = get_tile_impact(geometry.pos + offset_right, geometry.dir.xyz);
 			float4 color2 = tile_color_from_pos(tile_pos2);
 
-			float2 tile_pos3 = get_tile_impact(geometry.pos + offset_bottom, geometry.dir);
+			float2 tile_pos3 = get_tile_impact(geometry.pos + offset_bottom, geometry.dir.xyz);
 			float4 color3 = tile_color_from_pos(tile_pos3);
 
-			float2 tile_pos4 = get_tile_impact(geometry.pos + offset_bottom + offset_right, geometry.dir);
+			float2 tile_pos4 = get_tile_impact(geometry.pos + offset_bottom + offset_right, geometry.dir.xyz);
 			float4 color4 = tile_color_from_pos(tile_pos4);
 
 			float total_dist = color1.w + color2.w + color3.w + color4.w;
 			float3 color = (color1.rgb * color1.a + color2.rgb * color2.a + color3.rgb * color3.a + color4.rgb * color4.a) / total_dist;
 			// ============
 			material_output.diffuse_color = float4(color, 1.f);
-			material_output.specular_color.rgb = 0.5f;
+			material_output.specular_color.rgb = 0.325f + dot(color, color) * 0.125f;
 		}
 	}
 }
@@ -138,9 +129,26 @@ void map_normal(GeometryInput input, inout NormalOutput output)
 
 void map_light(GeometryInput input, inout LightOutput output[LIGHT_COUNT], inout float ambient_lighting_factor)
 {
-	output[0].used = true;
+	//output[0].used = true;
 	output[0].pos = float4(-1.f, -1.f, 2.f, 1.f);
 	output[0].color = float3(1.f, 1.2f, 1.f);
+
+	float time = stime * 0.25f;
+
+	float spheres[5];
+	for (uint i = 0; i < 5; ++i)
+	{
+		time += pi * 2.f / 5.f;
+		float sphere_x = cos(time * 1.f) * -5.f;
+		float sphere_y = (cos(time * 2.f) * -0.5f + 0.5f) * 2.f + 0.5f;
+		float sphere_z = sin(time * 2.f) * 2.f;
+
+		output[i + 1].used = true;
+		output[i + 1].pos.xyz = float3(sphere_x, sphere_y, sphere_z);
+		output[i + 1].extend = 0.25f;
+		output[i + 1].falloff = 0.25f;
+		output[i + 1].color = color_from_index(i) * 0.5f;
+	}
 }
 
 float3 map_background(float3 dir, uint iter_count)
