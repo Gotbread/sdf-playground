@@ -384,7 +384,7 @@ void ps_main(ps_input input, out ps_output output)
 			material_input.scene_distance = scene_distance;
 
 			MaterialOutput material_output;
-			material_output.material_id = 0;
+			material_output.material_id = MATERIAL_NONE;
 			material_output.material_position = float4(geometry_input.pos, 0.f);
 			material_output.material_properties = float4(0.f, 0.f, 0.f, 0.f);
 			material_output.diffuse_color = float4(0.f, 0.f, 0.f, 1.f);
@@ -400,6 +400,7 @@ void ps_main(ps_input input, out ps_output output)
 
 			map_material(geometry_input, material_input, material_output);
 
+			// change the hdr output to what the material wants, but only in the first iteration
 			float new_hdr = material_output.use_hdr ? 1.f : 0.f;
 			hdr_output = lerp(hdr_output, new_hdr, step(hdr_output, 0.f));
 			
@@ -587,5 +588,7 @@ void ps_main(ps_input input, out ps_output output)
 		// keep track of closest point relative to camera distance -> antialiasing
 	}
 
-	output.color.a = hdr_output;
+	// hdr_output is either -1 (not set), 0 (disable), or 1 (enable)
+	// with abs we map the "not set" case to the "enabled" case as well
+	output.color.a = abs(hdr_output);
 }
