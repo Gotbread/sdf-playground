@@ -10,6 +10,20 @@ float3 opRepLim(float3 pos, float3 count, float3 size)
 	return pos - clamp(rounded, -limit, limit);
 }
 
+float2 opRepLim(float2 pos, float2 count, float2 size)
+{
+	float2 rounded = size * (round(pos / size + count / 2) - count / 2);
+	float2 limit = count * size * 0.5f;
+	return pos - clamp(rounded, -limit, limit);
+}
+
+float opRepLim(float pos, float count, float size)
+{
+	float rounded = size * (round(pos / size + count / 2) - count / 2);
+	float limit = count * size * 0.5f;
+	return pos - clamp(rounded, -limit, limit);
+}
+
 float3 opRepInf(float3 pos, float3 size)
 {
 	float3 x = pos + size * 0.5f;
@@ -19,6 +33,12 @@ float3 opRepInf(float3 pos, float3 size)
 float2 opRepInf(float2 pos, float2 size)
 {
 	float2 x = pos + size * 0.5f;
+	return x - size * floor(x / size) - size * 0.5f;
+}
+
+float opRepInf(float pos, float size)
+{
+	float x = pos + size * 0.5f;
 	return x - size * floor(x / size) - size * 0.5f;
 }
 
@@ -40,6 +60,16 @@ float2 opRotate(float2 pos, float angle)
 	float s = sin(angle);
 	float c = cos(angle);
 	return float2(pos.x * c - pos.y * s, pos.x * s + pos.y * c);
+}
+
+// turns an object into a shell
+// inner is the value of the distance field which gets turned to the inner surface
+// outer is the value of the distance field which gets turned to the outer surface
+float opShell(float distance, float inner, float outer)
+{
+	float avg = (outer + inner) * 0.5f;
+	float diff = (outer - inner) * 0.5f;
+	return abs(distance - avg) - diff;
 }
 
 // transforms a 2D vector to a 45° tilted coordinate system
