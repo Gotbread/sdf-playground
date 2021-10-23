@@ -248,7 +248,7 @@ bool march_ray(inout GeometryInput geometry, MarchingInput march, float dist_max
 			step_factor = 1.5f;
 		}
 
-		geometry.pos = start_pos + geometry.dir * geometry.camera_distance;
+		geometry.pos = start_pos + geometry.dir.xyz * geometry.camera_distance;
 		scene_distance = map_geometry(geometry, march) * inside_sign;
 		// check for overstepping
 		if (step_factor > 1.f && (last_scene_distance + scene_distance) < last_scene_distance * step_factor)
@@ -261,17 +261,17 @@ bool march_ray(inout GeometryInput geometry, MarchingInput march, float dist_max
 		last_scene_distance = scene_distance;
 
 		// handle distance
-		if (scene_distance < dist_eps)
-		{
-			return true;
-		}
-		else if (scene_distance > dist_max)
+		if (geometry.camera_distance > dist_max)
 		{
 			return false;
 		}
+		else if (scene_distance < dist_eps)
+		{
+			return true;
+		}
 
 		last_safe_camera_distance = geometry.camera_distance + scene_distance;
-		geometry.camera_distance += scene_distance * step_factor;
+		geometry.camera_distance = geometry.camera_distance + scene_distance * step_factor;
 	}
 	return false;
 }
@@ -342,19 +342,20 @@ void ps_main(ps_input input, out ps_output output)
 		// march geometry
 		GeometryInput geometry_input;
 		geometry_input.pos = rays[ray_index].pos;
-		geometry_input.dir = rays[ray_index].dir;
+		geometry_input.dir.xyz = rays[ray_index].dir;
+		geometry_input.dir.w = 1.f;
 		geometry_input.right_ray_offset = right_ray_vec;
 		geometry_input.bottom_ray_offset = bottom_ray_vec;
 
 		MarchingInput marching_input;
-		marching_input.use_fast = true;
 		marching_input.is_inside = false;
 		marching_input.has_transparent = false;
 		marching_input.last_transparent_pos = float3(0.f, 0.f, 0.f);
+		marching_input.is_shadow_pass = false;
 
 		uint iter_count;
 		float scene_distance;
-		if (march_ray(geometry_input, marching_input, 100.f, inside_sign, iter_count, scene_distance))
+		if (march_ray(geometry_input, marching_input, RANGE, inside_sign, iter_count, scene_distance))
 		{
 			// calculate the normal, first pass
 			NormalOutput normal_output;
@@ -362,13 +363,12 @@ void ps_main(ps_input input, out ps_output output)
 			normal_output.normal = float3(0.f, 0.f, 0.f);
 			normal_output.normal_sample_dist = grad_eps;
 
-			marching_input.use_fast = false;
+			geometry_input.dir.w = 0;
 			map_normal(geometry_input, normal_output);
 			if (!normal_output.use_normal)
 			{
 				normal_output.normal = grad(geometry_input, marching_input, scene_distance * inside_sign, normal_output.normal_sample_dist);
 			}
-			marching_input.use_fast = true;
 
 			// get the material
 			MaterialInput material_input;
@@ -402,7 +402,7 @@ void ps_main(ps_input input, out ps_output output)
 				{
 					uint new_ray_index = find_free_ray(rays);
 
-					float3 ref_vec = reflect(geometry_input.dir, new_normal);
+					float3 ref_vec = reflect(geometry_input.dir.xyz, new_normal);
 					// start a new ray
 
 					rays[new_ray_index].pos = geometry_input.pos + ref_vec * reflect_eps;
@@ -423,7 +423,7 @@ void ps_main(ps_input input, out ps_output output)
 
 					if (inside_sign > 0.f) // just entering the material
 					{
-						float3 ref_vec = refract(geometry_input.dir, new_normal, 1.f / material_output.optical_index);
+						float3 ref_vec = refract(geometry_input.dir.xyz, new_normal, 1.f / material_output.optical_index);
 						// start a new ray
 
 						rays[new_ray_index].pos = geometry_input.pos + ref_vec * refract_eps;
@@ -434,7 +434,7 @@ void ps_main(ps_input input, out ps_output output)
 					}
 					else // leaving the material
 					{
-						float3 ref_vec = refract(geometry_input.dir, -new_normal, material_output.optical_index);
+						float3 ref_vec = refract(geometry_input.dir.xyz, -new_normal, material_output.optical_index);
 						// start a new ray
 
 						rays[new_ray_index].pos = geometry_input.pos + ref_vec * refract_eps;
