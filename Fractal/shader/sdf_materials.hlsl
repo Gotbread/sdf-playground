@@ -138,4 +138,45 @@ float4 braid(float2 uv, float width, float run_length, float run_flip, float2 mi
 
 	return float4(cell_index, cell_pos);
 }
+
+float3 debug_plane_color(float scene_distance)
+{
+	float int_steps;
+	float frac_steps = abs(modf(scene_distance, int_steps)) * 1.2f;
+	float band_steps = modf(int_steps / 5.f, int_steps);
+
+	float3 band_color = band_steps > 0.7f ? float3(1.f, 0.25f, 0.25f) : float3(0.75f, 0.75f, 1.f);
+	frac_steps = scene_distance < 5.f ? frac_steps : 0.5f;
+	float3 col = frac_steps < 1.f ? frac_steps * frac_steps * float3(1.f, 1.f, 1.f) : band_color;
+	col.g = scene_distance < 0.f ? (scene_distance > -0.01f ? 1.f : 0.f) : col.g;
+	return col;
+}
+
+float3 iter_count_to_color(uint iter_count, uint max_iter_count)
+{
+	float rel_iter_count = ((float)iter_count) / max_iter_count;
+	float3 col1 = float3(0.f, 0.f, 0.f);
+	float3 col2 = float3(0.f, 0.f, 1.f);
+	float3 col3 = float3(0.f, 1.f, 0.f);
+	float3 col4 = float3(1.f, 1.f, 0.f);
+	float3 col5 = float3(1.f, 0.f, 0.f);
+
+	if (rel_iter_count < 0.1f)
+	{
+		return lerp(col1, col2, rel_iter_count / 0.1f);
+	}
+	else if (rel_iter_count < 0.5f)
+	{
+		return lerp(col2, col3, (rel_iter_count - 0.1f) / 0.4f);
+	}
+	else if (rel_iter_count < 0.9f)
+	{
+		return lerp(col3, col4, (rel_iter_count - 0.5f) / 0.4f);
+	}
+	else
+	{
+		return lerp(col4, col5, (rel_iter_count - 0.9f) / 0.1f);
+	}
+}
+
 #endif

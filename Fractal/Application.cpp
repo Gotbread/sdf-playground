@@ -9,7 +9,7 @@
 
 using namespace Math3D;
 
-//#define PROFILE_OUTPUT
+#define PROFILE_OUTPUT
 
 bool Application::Init(HINSTANCE hInstance)
 {
@@ -244,7 +244,7 @@ bool Application::initGraphics()
 	scroll_pos3 = 0.f;
 
 	// default scene
-	includer.setSubstitutions({ {"sdf_scene.hlsl", "scenes/sdf_scene_cube3.hlsl"} });
+	includer.setSubstitutions({ {"sdf_scene.hlsl", "scenes/sdf_scene_fast_sphere.hlsl"} });
 	initShader();
 
 	return true;
@@ -284,7 +284,7 @@ void Application::render()
 
 	SDFRenderer::DebugPlane debug_plane;
 	debug_plane.show = show_debug_plane;
-	debug_plane.ruler_scale = 0.05f;
+	debug_plane.ruler_scale = 0.2f;
 	if (show_debug_plane)
 	{
 		if (scroll_pos1 > 0.f)

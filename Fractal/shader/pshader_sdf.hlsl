@@ -39,18 +39,6 @@ static const float max_dist_check = 1e30; // maximum practical number
 static const float3 lighting_dir = normalize(float3(-0.5f, -1.f, 1.75f));
 
 /*
-float3 debug_plane_color(float scene_distance)
-{
-	float int_steps;
-	float frac_steps = abs(modf(scene_distance / debug_ruler_scale, int_steps)) * 1.2f;
-	float band_steps = modf(int_steps / 5.f, int_steps);
-
-	float3 band_color = band_steps > 0.7f ? float3(1.f, 0.25f, 0.25f) : float3(0.75f, 0.75f, 1.f);
-	frac_steps = scene_distance < 5.f ? frac_steps : 0.5f;
-	float3 col = frac_steps < 1.f ? frac_steps * frac_steps * float3(1.f, 1.f, 1.f) : band_color;
-	col.g = scene_distance < 0.f ? (scene_distance > -0.01f ? 1.f : 0.f) : col.g;
-	return col;
-}
 
 float2 map_debug(float3 p, float3 dir, out float3 material_property)
 {
@@ -196,15 +184,38 @@ float map_geometry(GeometryInput geometry, MarchingInput march)
 	MaterialOutput material_output = (MaterialOutput)0;
 
 	map(geometry, march, material_input, material_output, true, output_scene_distance);
+	float distance_debug_plane = sdPlaneFast(geometry.pos - debug_plane_point, geometry.dir, debug_plane_normal);
 
-	return output_scene_distance;
+	if (any(debug_plane_normal))
+	{
+		return min(output_scene_distance, distance_debug_plane);
+	}
+	else
+	{
+		return output_scene_distance;
+	}
 }
 
 void map_material(GeometryInput geometry, MaterialInput material_input, inout MaterialOutput material_output)
 {
-	float dummy = 0.f;
+	float output_scene_distance = 3e38;
 	MarchingInput march = (MarchingInput)0;
-	map(geometry, march, material_input, material_output, false, dummy);
+	float distance_debug_plane = sdPlaneFast(geometry.pos - debug_plane_point, geometry.dir, debug_plane_normal);
+	if (any(debug_plane_normal) && MATERIAL(distance_debug_plane))
+	{
+		MaterialInput material_input_dummy = (MaterialInput)0;
+		MaterialOutput material_output_dummy = (MaterialOutput)0;
+
+		geometry.dir.w = 0.f;
+		map(geometry, march, material_input_dummy, material_output_dummy, true, output_scene_distance);
+
+		material_output.material_id = MATERIAL_DISTANCE_PLANE;
+		material_output.material_properties.x = output_scene_distance;
+	}
+	else
+	{
+		map(geometry, march, material_input, material_output, false, output_scene_distance);
+	}
 }
 
 float3 grad(GeometryInput geometry, MarchingInput march, float baseline, float sample_distance)
