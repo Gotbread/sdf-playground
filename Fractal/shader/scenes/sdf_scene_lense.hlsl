@@ -19,11 +19,11 @@ void map(GeometryInput geometry, MarchingInput march, MaterialInput material_inp
 	float background2 = lerp(background2_sphere, background2_box, 0.65) - 0.1;
 
 	// lense
-	float3 lance_pos = abs(geometry.pos);
-	lance_pos.z -= 5.1f;
-	float lance1 = sdSphere(lance_pos, 5.f);
-	float lance2 = sdSphere(geometry.pos, 2.f);
-	float lance = max(-lance1, lance2);
+	float3 lense_pos = abs(geometry.pos);
+	lense_pos.z -= 5.1f;
+	float lense1 = sdSphere(lense_pos, 5.f);
+	float lense2 = sdSphere(geometry.pos, 2.f);
+	float lense = max(-lense1, lense2);
 
 	// sphere
 	float x = VAR_xpos(min = -4, max = 4, step = 0.1);
@@ -43,7 +43,7 @@ void map(GeometryInput geometry, MarchingInput march, MaterialInput material_inp
 	{
 		OBJECT(background1);
 		OBJECT(background2);
-		OBJECT(lance);
+		OBJECT(lense);
 		OBJECT(sphere);
 		OBJECT(mirror);
 		OBJECT(mirror_frame);
@@ -67,19 +67,17 @@ void map(GeometryInput geometry, MarchingInput march, MaterialInput material_inp
 			material_output.specular_color.rgb = 1.f;
 			material_output.reflection_color = 0.5f;
 		}
-		else if (MATERIAL(lance))
+		else if (MATERIAL(lense))
 		{
 			material_output.diffuse_color = float4(0.3f, 0.3f, 0.3f, 1.f);
 			material_output.refraction_color = float3(0.9f, 0.9f, 0.9f);
 		}
 		else if (MATERIAL(sphere))
 		{
-			material_output.diffuse_color = float4(0.8f, 0.2f, 0.2f, 1.f);
+			material_output.diffuse_color = float4(1.f, 0.2f, 0.2f, 1.f);
 			material_output.emissive_color = float3(8.f, 0.f, 0.f);
 			material_output.specular_color.rgb = 1.f;
 			material_output.reflection_color = 0.25f;
-			material_output.normal.xyz = material_input.obj_normal + snoise(geometry.pos * 60.f) * 0.1f;
-			material_output.normal.a = 0.f;
 		}
 		else if (MATERIAL(mirror))
 		{
@@ -104,7 +102,7 @@ void map_light(GeometryInput input, inout LightOutput output[LIGHT_COUNT], inout
 {
 	output[0].used = true;
 	output[0].pos = float4(-1.f, -1.f, 2.f, 1.f);
-	output[0].color = float3(1.f, 1.2f, 1.f);
+	output[0].color = float3(1.f, 1.f, 1.f);
 }
 
 float3 map_background(float3 dir, uint iter_count)
