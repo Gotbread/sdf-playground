@@ -7,7 +7,8 @@ struct GeometryInput
 	float3 pos;
 
 	// xyz: the direction of the ray, if directional
-	float3 dir;
+	// w: if 1, can use fast methods. if 0, use slow method
+	float4 dir;
 
 	// the euclidean distance from the eye
 	float camera_distance;
@@ -21,10 +22,6 @@ struct GeometryInput
 
 struct MarchingInput
 {
-	// if true, we are just marching along a ray and can use fast methods if available
-	// the "dir" member will be valid if this is set
-	bool use_fast;
-
 	// if true, we are inside an object and work with negative distance values
 	// if false, we are outside an object and work with positive distance values (default case)
 	bool is_inside;
@@ -34,6 +31,9 @@ struct MarchingInput
 
 	// if last_transparent_pos is valid
 	bool has_transparent;
+
+	// true when looking for shadows
+	bool is_shadow_pass;
 };
 
 struct NormalOutput
@@ -104,6 +104,9 @@ struct MaterialOutput
 
 	// how deep the rays we can launch from this
 	uint max_cost;
+
+	// enable hdr and bloom? preloaded with true
+	bool use_hdr;
 };
 
 struct LightOutput
