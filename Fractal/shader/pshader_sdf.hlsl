@@ -540,7 +540,7 @@ void ps_main(ps_input input, out ps_output output)
 						}
 						else // point light
 						{
-							lighting_dir = geometry_input.pos - light_output[i2].pos.xyz;
+							lighting_dir = scene_pos - light_output[i2].pos.xyz;
 							distance_to_trace = length(lighting_dir);
 							lighting_dir /= distance_to_trace;
 							distance_to_trace -= light_output[i2].extend;
