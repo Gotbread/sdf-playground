@@ -74,22 +74,27 @@ struct Ray
 
 float3 get_debug_plane_point()
 {
-	float debug_plane_point_x = VAR_debug_x(min = -10, max = +10, step = 0.05);
-	float debug_plane_point_y = VAR_debug_y(min = -10, max = +10, step = 0.05);
-	float debug_plane_point_z = VAR_debug_z(min = -10, max = +10, step = 0.05);
+	float debug_plane_point_x = VAR_debug_x(min = -10, max = +10, step = 0.02);
+	float debug_plane_point_y = VAR_debug_y(min = -10, max = +10, step = 0.02);
+	float debug_plane_point_z = VAR_debug_z(min = -10, max = +10, step = 0.02);
 
 	return float3(debug_plane_point_x, debug_plane_point_y, debug_plane_point_z);
 }
 
 float3 get_debug_plane_normal()
 {
-	float debug_plane_normal_x = VAR_debug_nx(min = -1, max = +1, step = 0.05);
-	float debug_plane_normal_y = VAR_debug_ny(min = -1, max = +1, step = 0.05);
-	float debug_plane_normal_z = VAR_debug_nz(min = -1, max = +1, step = 0.05);
+	float debug_plane_normal_x = VAR_debug_nx(min = -1, max = +1, step = 0.02);
+	float debug_plane_normal_y = VAR_debug_ny(min = -1, max = +1, step = 0.02);
+	float debug_plane_normal_z = VAR_debug_nz(min = -1, max = +1, step = 0.02);
 
 	float3 debug_plane_normal = float3(debug_plane_normal_x, debug_plane_normal_y, debug_plane_normal_z);
 
 	return any(debug_plane_normal) ? normalize(debug_plane_normal) : 0.f;
+}
+
+bool debug_show_objects()
+{
+	return any(VAR_show_objects(min = 0, max = 1, step = 1, start = 1));
 }
 
 float map_geometry(GeometryInput geometry, MarchingInput march)
@@ -102,7 +107,10 @@ float map_geometry(GeometryInput geometry, MarchingInput march)
 	MaterialInput material_input = (MaterialInput)0;
 	MaterialOutput material_output = (MaterialOutput)0;
 
-	map(geometry, march, material_input, material_output, true, output_scene_distance);
+	if (debug_show_objects())
+	{
+		map(geometry, march, material_input, material_output, true, output_scene_distance);
+	}
 	float distance_debug_plane = sdPlaneFast(geometry.pos - debug_plane_point, geometry.dir, debug_plane_normal);
 
 	if (any(debug_plane_normal))
@@ -120,7 +128,7 @@ void map_material(GeometryInput geometry, MaterialInput material_input, inout Ma
 	float3 debug_plane_point = get_debug_plane_point();
 	float3 debug_plane_normal = get_debug_plane_normal();
 
-	float debug_plane_scale = VAR_debug_scale(min = 0.01, max = 2, step = 0.01);
+	float debug_plane_scale = VAR_debug_scale(min = 0.005, max = 2, step = 0.005, start = 0.2);
 
 	float output_scene_distance = 3e38;
 	MarchingInput march = (MarchingInput)0;

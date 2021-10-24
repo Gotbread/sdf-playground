@@ -139,6 +139,7 @@ float4 braid(float2 uv, float width, float run_length, float run_flip, float2 mi
 	return float4(cell_index, cell_pos);
 }
 
+// creates the color used for the debug plane
 float3 debug_plane_color(float scene_distance)
 {
 	float int_steps;
@@ -152,6 +153,11 @@ float3 debug_plane_color(float scene_distance)
 	return col;
 }
 
+// converts an iteration count to a color scheme
+//  0% - 10%: black to blue
+// 10% - 50%: blue to green
+// 50% - 90%: green to yellow
+// 90% - 100%: yellow to red
 float3 iter_count_to_color(uint iter_count, uint max_iter_count)
 {
 	float rel_iter_count = ((float)iter_count) / max_iter_count;
@@ -177,6 +183,21 @@ float3 iter_count_to_color(uint iter_count, uint max_iter_count)
 	{
 		return lerp(col4, col5, (rel_iter_count - 0.9f) / 0.1f);
 	}
+}
+
+// maps the coordinate value to a grid value
+// width is the width of the grid lines
+// returns a great value of on a grid line
+// use e.g. a threshold function to select which lines to show
+// works well on a curved surface, e.g. spheres, with a threshold
+// of 0.5
+float coordinate_material(float3 pos, float3 norm, float width)
+{
+	float3 reduced_pos = pos - floor(pos);
+	reduced_pos = abs(reduced_pos - 0.5f);
+	float3 hits_tick = saturate((reduced_pos - 0.5f + width) * 100.f);
+	float3 mask = 1.f - abs(norm);
+	return dot(hits_tick, mask);
 }
 
 #endif

@@ -40,9 +40,9 @@ void map(GeometryInput geometry, MarchingInput march, MaterialInput material_inp
 	{
 		if (MATERIAL(ringsphere))
 		{
-			float r = VAR_red(min = 0, max = 1, start = 0.1, step = 0.05);
+			float r = VAR_red(min = 0, max = 3, start = 0.1, step = 0.05);
 			float g = VAR_green(min = 0, max = 3, start = 1.0, step = 0.05);
-			float b = VAR_blue(min = 0, max = 1, start = 0.2, step = 0.05);
+			float b = VAR_blue(min = 0, max = 3, start = 0.2, step = 0.05);
 
 			material_output.emissive_color.rgb = float3(r, g, b);
 			material_output.diffuse_color.rgb = float3(r, g, b) / 2;
