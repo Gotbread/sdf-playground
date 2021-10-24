@@ -146,7 +146,7 @@ float3 debug_plane_color(float scene_distance)
 	float band_steps = modf(int_steps / 5.f, int_steps);
 
 	float3 band_color = band_steps > 0.7f ? float3(1.f, 0.25f, 0.25f) : float3(0.75f, 0.75f, 1.f);
-	frac_steps = scene_distance < 5.f ? frac_steps : 0.5f;
+	frac_steps = scene_distance < 25.f ? frac_steps : 0.5f;
 	float3 col = frac_steps < 1.f ? frac_steps * frac_steps * float3(1.f, 1.f, 1.f) : band_color;
 	col.g = scene_distance < 0.f ? (scene_distance > -0.01f ? 1.f : 0.f) : col.g;
 	return col;
