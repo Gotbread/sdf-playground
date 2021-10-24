@@ -55,8 +55,6 @@ bool Application::Init(HINSTANCE hInstance)
 		return false;
 	}
 
-	show_debug_plane = false;
-
 	paused = false;
 	single_frame_mode = false;
 	do_single_renderer = false;
@@ -126,19 +124,6 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 					camera.RotateY(motion->x / -500.f);
 					camera.RotateX(motion->y / -500.f);
 				}
-				if (input_manager.getMouseState(InputManager::MouseButton::Middle))
-				{
-					scroll_pos1 += motion->x / 1000.f;
-					scroll_pos1 = std::min(std::max(scroll_pos1, -1.f), +1.f);
-
-					scroll_pos2 += motion->y / 1000.f;
-					scroll_pos2 = std::min(std::max(scroll_pos2, -10.f), +10.f);
-				}
-				if (input_manager.getMouseState(InputManager::MouseButton::Right))
-				{
-					scroll_pos3 += motion->x / 1000.f;
-					scroll_pos3 = std::min(std::max(scroll_pos3, 0.f), 1.f);
-				}
 			}
 		}
 		break;
@@ -177,9 +162,6 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 				break;
 			}
 		}
-		break;
-	case WM_MBUTTONDOWN:
-		show_debug_plane ^= true;
 		break;
 	case WM_DESTROY:
 		PostQuitMessage(0);
@@ -239,9 +221,6 @@ bool Application::initGraphics()
 	camera.SetLookat(Vector3(0.f, 1.f, 0.f));
 
 	stime = 0.f;
-	scroll_pos1 = 1.f;
-	scroll_pos2 = 0.f;
-	scroll_pos3 = 0.f;
 
 	// default scene
 	includer.setSubstitutions({ {"sdf_scene.hlsl", "scenes/sdf_scene_fast_sphere.hlsl"} });
@@ -282,27 +261,7 @@ void Application::render()
 #endif
 	}
 
-	SDFRenderer::DebugPlane debug_plane;
-	debug_plane.show = show_debug_plane;
-	debug_plane.ruler_scale = 0.2f;
-	if (show_debug_plane)
-	{
-		if (scroll_pos1 > 0.f)
-		{
-			debug_plane.normal = Math3D::Matrix4x4::RotationXMatrix(scroll_pos1 * Math3D::PI * +0.5f) * Math3D::Vector3(0.f, 1.f, 0.f);
-		}
-		else
-		{
-			debug_plane.normal = Math3D::Matrix4x4::RotationZMatrix(scroll_pos1 * Math3D::PI * -0.5f) * Math3D::Vector3(0.f, 1.f, 0.f);
-		}
-	}
-	else
-	{
-		debug_plane.normal = Math3D::Vector3::NullVector();
-	}
-	debug_plane.point = debug_plane.normal * scroll_pos2;
-
-	sdf_renderer.setParameters(debug_plane, stime);
+	sdf_renderer.setParameters(stime);
 
 	float clear_color[4] = {0.25f, 0.f, 0.f, 0.f};
 	auto ctx = graphics.GetContext();

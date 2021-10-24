@@ -1,7 +1,6 @@
 #include "sdf_primitives.hlsl"
 #include "sdf_materials.hlsl"
 #include "sdf_ops.hlsl"
-#include "user_variables.hlsl"
 #include "noise.hlsl"
 
 float2 get_tile_impact(float3 pos, float3 dir)

@@ -35,7 +35,6 @@ bool SDFRenderer::initShader(ShaderIncluder &includer)
 	var_manager.setSlot(1);
 	var_manager.getVariables().clear();
 	includer.setShaderVariableManager(&var_manager);
-	includer.setShaderCodeGenerator(&code_generator);
 	Comptr<ID3DBlob> p_compiled = compileShader(includer, "pshader_sdf.hlsl", "ps_5_0", "ps_main");
 	if (!p_compiled)
 		return false;
@@ -53,9 +52,8 @@ bool SDFRenderer::initShader(ShaderIncluder &includer)
 	return true;
 }
 
-void SDFRenderer::setParameters(const DebugPlane &debug_plane, float stime)
+void SDFRenderer::setParameters(float stime)
 {
-	this->debug_plane = debug_plane;
 	this->stime = stime;
 }
 
@@ -92,11 +90,7 @@ bool SDFRenderer::render(FullscreenQuad &quad, GPUProfiler &profiler, Camera &ca
 	cam_buf->right_vec = (camera.GetFrustrumEdge(0) - camera.GetFrustrumEdge(3)) * 0.5f;
 	cam_buf->top_vec = (camera.GetFrustrumEdge(0) - camera.GetFrustrumEdge(1)) * 0.5f;
 
-	cam_buf->debug_plane_normal = debug_plane.show ? debug_plane.normal.Normalized() : Math3D::Vector3::NullVector();
-	cam_buf->debug_plane_point = debug_plane.point;
-	
-	cam_buf->params.debug_plane_scale = debug_plane.ruler_scale;
-	cam_buf->params.stime = stime;
+	cam_buf->stime = stime;
 
 	ctx->Unmap(camera_buffer, 0);
 	ctx->PSSetConstantBuffers(0, 2, constant_buffers);

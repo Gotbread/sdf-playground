@@ -52,6 +52,4 @@ private:
 	bool paused;
 	bool single_frame_mode;
 	bool do_single_renderer;
-	float scroll_pos1, scroll_pos2, scroll_pos3;
-	bool show_debug_plane;
 };

@@ -28,9 +28,17 @@ void ShaderIncluder::setShaderVariableManager(ShaderVariableManager *var_manager
 	this->var_manager = var_manager;
 }
 
-void ShaderIncluder::setShaderCodeGenerator(ShaderCodeGenerator *code_generator)
+void ShaderIncluder::setPass(ShaderPass pass)
 {
-	this->code_generator = code_generator;
+	if (var_manager)
+	{
+		var_manager->setPass(pass);
+	}
+}
+
+bool ShaderIncluder::hasVarManager() const
+{
+	return var_manager;
 }
 
 HRESULT STDMETHODCALLTYPE ShaderIncluder::Open(D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID *ppData, UINT *pBytes)
@@ -98,19 +106,17 @@ bool ShaderIncluder::loadFromFile(const std::string &filename, std::string &code
 		setExtraHeaders({ { "user_variables.hlsl", header } });
 	}
 
-	if (code_generator)
-	{
-		std::string new_code;
-		code_generator->parseFile(code, new_code);
-		code.swap(new_code);
-	}
-
 	return true;
 }
 
 void ShaderVariableManager::setSlot(unsigned slot)
 {
 	this->slot = slot;
+}
+
+void ShaderVariableManager::setPass(ShaderPass pass)
+{
+	this->pass = pass;
 }
 
 bool ShaderVariableManager::parseFile(const std::string &input, std::string &output)
@@ -130,42 +136,55 @@ bool ShaderVariableManager::parseFile(const std::string &input, std::string &out
 		auto var_name_short = variable_iter->substr(var_tag.size(), bracket_begin - var_tag.size());
 		auto param_string = variable_iter->substr(bracket_begin + 1, bracket_end - bracket_begin - 1);
 
-		output += *code_iter;
-		output += var_name;
-
-		// build the param map
-		auto [params, _] = splitString(param_string, ",");
-		std::map<std::string, float> param_map;
-		for (const auto &param : params)
+		if (pass == ShaderPass::CombinedPass || pass == ShaderPass::GeneratePass)
 		{
-			auto [parts, separators] = splitString(param, "=");
-			if (parts.size() != 2)
-			{
-				if (separators.size() == 1)
-				{
-					return false;
-				}
-				break;
-			}
-
-			auto name_str = removeSpaces(parts[0]);
-			auto val_str = removeSpaces(parts[1]);
-			param_map[std::string(name_str)] = std::stof(std::string(val_str));
+			output += *code_iter;
+			output += var_name;
+		}
+		else
+		{
+			// just create a dummy variable
+			output += *code_iter;
+			output += "0.f";
 		}
 
-		// add the variable
-		Variable var;
-		auto iter = param_map.find("min");
-		var.minval = iter != param_map.end() ? iter->second : 0.f;
-		iter = param_map.find("max");
-		var.maxval = iter != param_map.end() ? iter->second : 2.f;
-		iter = param_map.find("start");
-		var.start = iter != param_map.end() ? iter->second : (var.maxval + var.minval) * 0.5f;
-		iter = param_map.find("step");
-		var.step = iter != param_map.end() ? iter->second : (var.maxval - var.minval) * 0.05f;
-		var.value = var.start;
+		if (pass == ShaderPass::CombinedPass || pass == ShaderPass::CollectPass)
+		{
 
-		variables[std::string(var_name_short)] = var;
+			// build the param map
+			auto [params, _] = splitString(param_string, ",");
+			std::map<std::string, float> param_map;
+			for (const auto &param : params)
+			{
+				auto [parts, separators] = splitString(param, "=");
+				if (parts.size() != 2)
+				{
+					if (separators.size() == 1)
+					{
+						return false;
+					}
+					break;
+				}
+
+				auto name_str = removeSpaces(parts[0]);
+				auto val_str = removeSpaces(parts[1]);
+				param_map[std::string(name_str)] = std::stof(std::string(val_str));
+			}
+
+			// add the variable
+			Variable var;
+			auto iter = param_map.find("min");
+			var.minval = iter != param_map.end() ? iter->second : 0.f;
+			iter = param_map.find("max");
+			var.maxval = iter != param_map.end() ? iter->second : 2.f;
+			iter = param_map.find("start");
+			var.start = iter != param_map.end() ? iter->second : (var.maxval + var.minval) * 0.5f;
+			iter = param_map.find("step");
+			var.step = iter != param_map.end() ? iter->second : (var.maxval - var.minval) * 0.05f;
+			var.value = var.start;
+
+			variables[std::string(var_name_short)] = var;
+		}
 	}
 	output += code_blocks.back();
 	return true;
@@ -173,13 +192,15 @@ bool ShaderVariableManager::parseFile(const std::string &input, std::string &out
 
 std::string ShaderVariableManager::generateHeader() const
 {
-	if (variables.empty())
+	if (variables.empty() || pass == ShaderPass::CollectPass)
 	{
 		return {};
 	}
 
 	Format formatter;
 	formatter <<
+		"#ifndef USER_VARIABLES_HLSL\n"
+		"#define USER_VARIABLES_HLSL\n"
 		"cbuffer user_variables : register(b" << slot << ")\n"
 		"{\n"
 		"	float ";
@@ -194,7 +215,8 @@ std::string ShaderVariableManager::generateHeader() const
 	}
 	formatter << ";\n";
 	formatter <<
-		"};\n";
+		"};\n"
+		"#endif\n";
 
 	return formatter;
 }
@@ -254,52 +276,45 @@ std::string_view ShaderVariableManager::getVarTag()
 	return "VAR_";
 }
 
-bool ShaderCodeGenerator::parseFile(const std::string &input, std::string &output)
-{
-	/*output.clear();
-
-	// process map_normal function
-	{
-		std::string_view function_type = "void";
-		std::string_view function_name = "map_normal";
-
-		auto [code, signature] = splitString(input, function_type, function_name);
-		if (signature.empty()) // nothing found?
-		{
-			output += "void map_normal(GeometryInput input, inout NormalOutput output)\n{\n}\n";
-		}
-	}
-	//
-
-	// process the map_combined function
-	{
-		std::string_view function_type = "void";
-		std::string_view function_name = "map_combined";
-		auto [code, signature] = splitString(input, function_type, function_name);
-	}*/
-
-	output += input;
-	return true;
-}
-
 Comptr<ID3DBlob> compileShader(ShaderIncluder &includer, const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings, bool disassemble)
 {
-	std::string code;
-	// first load the file
-	if (!includer.loadFromFile(filename, code))
+	Comptr<ID3DBlob> compiled, error;
+	if (includer.hasVarManager()) // go for 2 pass mode
 	{
-		ErrorBox(Format() << "Could not load file \"" << filename << "\"");
+		includer.setPass(ShaderPass::CollectPass);
+		bool file_ok = compileShaderPass(includer, filename, profile, entry, D3DCOMPILE_OPTIMIZATION_LEVEL0, compiled, error);
+		if (!file_ok)
+		{
+			return {}; // if the initial file loading fails, nothing else to do
+		}
+
+		if (!compiled) // we need code to proceed here, so this is an error and we abort
+		{
+			if (error)
+			{
+				ErrorBox(static_cast<const char *>(error->GetBufferPointer()));
+			}
+			return {};
+		}
+
+		// reset the buffer
+		compiled = nullptr;
+		error = nullptr;
+
+		// setup the next pass
+		includer.setPass(ShaderPass::GeneratePass);
+	}
+	else // single pass
+	{
+		includer.setPass(ShaderPass::CombinedPass);
 	}
 
-	// then try to compile it
-	UINT flags =
-#ifdef _DEBUG
-		D3DCOMPILE_DEBUG |
-#endif
-		D3DCOMPILE_OPTIMIZATION_LEVEL3;
+	bool file_ok = compileShaderPass(includer, filename, profile, entry, D3DCOMPILE_OPTIMIZATION_LEVEL3, compiled, error);
+	if (!file_ok)
+	{
+		return {}; // if the initial file loading fails, nothing else to do
+	}
 
-	Comptr<ID3DBlob> compiled, error;
-	D3DCompile(code.c_str(), code.length(), filename.c_str(), nullptr, &includer, entry.c_str(), profile.c_str(), flags, 0, &compiled, &error);
 	if (error)
 	{
 		if (!compiled) // no code, thus an error
@@ -329,4 +344,25 @@ Comptr<ID3DBlob> compileShader(ShaderIncluder &includer, const std::string &file
 	}
 
 	return compiled;
+}
+
+bool compileShaderPass(ShaderIncluder &includer, const std::string &filename, const std::string &profile, const std::string &entry, unsigned extra_flags, Comptr<ID3DBlob> &compiled, Comptr<ID3DBlob> &error)
+{
+	std::string code;
+	// first load the file
+	if (!includer.loadFromFile(filename, code))
+	{
+		ErrorBox(Format() << "Could not load file \"" << filename << "\"");
+		return false;
+	}
+
+	// then try to compile it
+	UINT flags =
+#ifdef _DEBUG
+		D3DCOMPILE_DEBUG |
+#endif
+		extra_flags;
+
+	D3DCompile(code.c_str(), code.length(), filename.c_str(), nullptr, &includer, entry.c_str(), profile.c_str(), flags, 0, &compiled, &error);
+	return true;
 }

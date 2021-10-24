@@ -11,8 +11,14 @@
 #include <map>
 #include <filesystem>
 
+enum class ShaderPass
+{
+	CombinedPass,
+	CollectPass,
+	GeneratePass
+};
+
 class ShaderVariableManager;
-class ShaderCodeGenerator;
 
 class ShaderIncluder : public ID3DInclude
 {
@@ -24,10 +30,11 @@ public:
 	void setSubstitutions(std::vector<Substitution> substitutions);
 	void setExtraHeaders(std::vector<MemoryHeader> headers);
 	void setShaderVariableManager(ShaderVariableManager *var_manager);
-	void setShaderCodeGenerator(ShaderCodeGenerator *code_generator);
+	void setPass(ShaderPass);
+	bool hasVarManager() const;
 
-	HRESULT STDMETHODCALLTYPE Open(D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID *ppData, UINT *pBytes);
-	HRESULT STDMETHODCALLTYPE Close(LPCVOID pData);
+	HRESULT STDMETHODCALLTYPE Open(D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID *ppData, UINT *pBytes) override;
+	HRESULT STDMETHODCALLTYPE Close(LPCVOID pData) override;
 
 	// in this class so we bundle all the file handling at one place
 	bool loadFromFile(const std::string &filename, std::string &code);
@@ -37,7 +44,6 @@ private:
 	std::vector<MemoryHeader> headers;
 
 	ShaderVariableManager *var_manager = nullptr;
-	ShaderCodeGenerator *code_generator = nullptr;
 };
 
 class ShaderVariableManager
@@ -45,6 +51,7 @@ class ShaderVariableManager
 public:
 	// sets the slot of the corresponding constant buffer
 	void setSlot(unsigned slot);
+	void setPass(ShaderPass);
 	// parses the input shader, replaces all variable encounters
 	// and also creates the variable entries
 	bool parseFile(const std::string &input, std::string &output);
@@ -62,14 +69,10 @@ private:
 
 	VariableMap variables;
 	unsigned slot;
+	ShaderPass pass = ShaderPass::CombinedPass;
 
 	Comptr<ID3D11Buffer> cbuffer;
 };
 
-class ShaderCodeGenerator
-{
-public:
-	bool parseFile(const std::string &input, std::string &output);
-};
-
 Comptr<ID3DBlob> compileShader(ShaderIncluder &includer, const std::string &filename, const std::string &profile, const std::string &entry, bool display_warnings = true, bool disassemble = false);
+bool compileShaderPass(ShaderIncluder &includer, const std::string &filename, const std::string &profile, const std::string &entry, unsigned extra_flags, Comptr<ID3DBlob> &compiled, Comptr<ID3DBlob> &error);

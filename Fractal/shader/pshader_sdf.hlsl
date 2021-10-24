@@ -20,14 +20,13 @@ cbuffer camera : register(b0)
 	float3 front_vec;
 	float3 right_vec;
 	float3 top_vec;
-	
-	float3 debug_plane_point;
-	float3 debug_plane_normal;
 
 	float _unused;
 	float stime;
-	float debug_ruler_scale;
 };
+
+// pull in the user constants
+#include "user_variables.hlsl"
 
 static const float dist_eps = 0.0001f;    // how close to the object before terminating
 static const float grad_eps = 0.0001f;    // how far to move when computing the gradient
@@ -37,116 +36,6 @@ static const float shadow_eps = 0.0003f;   // how far to step along the light ra
 static const float max_dist_check = 1e30; // maximum practical number
 
 static const float3 lighting_dir = normalize(float3(-0.5f, -1.f, 1.75f));
-
-/*
-
-float2 map_debug(float3 p, float3 dir, out float3 material_property)
-{
-	float distance_cut_plane = sdPlaneFast(p - debug_plane_point, dir, debug_plane_normal);
-	float2 distance_scene = map(float4(p, 1.f), dir, material_property);
-	if (dot(debug_plane_normal, debug_plane_normal) > 0.5f && distance_cut_plane < distance_scene.x)
-	{
-		distance_scene = map(float4(p, 0.f), float3(0.f, 0.f, 0.f), material_property);
-		material_property = debug_plane_color(distance_scene.x);
-		return float2(distance_cut_plane, 0.f);
-	}
-	else
-	{
-		return distance_scene;
-	}
-}
-
-float4 colorize(float3 pos, float3 dir, float scene_distance, float iter_count, float material_id, float3 material_property)
-{
-	float3 color_multiplier = float3(1.f, 1.f, 1.f);
-	float3 col = float3(0.1f, 0.1f, 0.f); // the output color
-	float3 extra_color = float3(0.f, 0.f, 0.f);
-
-	if (material_id == 100.f) // 100 = fire. if we hit fire, continue with the marching process until we hit something else
-	{
-		// add the fire color
-		float3 normal = grad(pos, scene_distance, 1.f);
-
-		float fadeout = saturate(dot(dir, normal));
-		extra_color = fire(material_property, 1.f - fadeout);
-		
-		// continue
-		float4 hit_info;
-		if (raymarch_scene_opaque(pos, dir, max_dist_check, hit_info, material_property))
-		{
-			scene_distance = hit_info.z;
-			iter_count += hit_info.y;
-			material_id = hit_info.x;
-		}
-	}
-	if (material_id == 50.f) // 50 = mirror
-	{
-		float3 normal = grad(pos, scene_distance, 1.f);
-
-		pos -= normal * 0.01f;
-		dir = reflect(dir, normal);
-		color_multiplier = material_property;
-
-		float4 hit_info;
-		if (raymarch_scene_opaque(pos, dir, max_dist_check, hit_info, material_property))
-		{
-			scene_distance = hit_info.z;
-			iter_count += hit_info.y;
-			material_id = hit_info.x;
-		}
-	}
-
-	// now select the material id
-	if (material_id == 0.f) // 0 = debug plane
-	{
-		col = material_property;
-	}
-	else if (material_id == 1.f) // 1 = iter count
-	{
-		col = iter_count / 100.f;
-	}
-	else if (material_id == 2.f) // 2 = solid color
-	{
-		col = material_property;
-	}
-	else // all other colors are with shading now
-	{
-		float3 diffuse_color = float3(0.5f, 0.5f, 0.5f);
-		if (material_id == 3.f) // 3 = solid color with shading
-		{
-			diffuse_color = material_property;
-		}
-		else if (material_id == 4.f) // 4 = marble
-		{
-			diffuse_color = marble(material_property, float3(0.556f, 0.478f, 0.541f));
-		}
-		else if (material_id == 5.f) // 5 = white marble
-		{
-			diffuse_color = marble(material_property, float3(0.7f, 0.7f, 0.7f));
-		}
-		else if (material_id == 6.f) // 6 = wood
-		{
-			diffuse_color = wood(material_property);
-		}
-
-		float3 normal = grad(pos, scene_distance, 0.f);
-		float diffuse_shading = saturate(dot(normal, lighting_dir));
-		float3 specular_ref = reflect(lighting_dir, normal);
-		float specular_shading = pow(saturate(dot(specular_ref, -dir)), 12.f);
-		float3 specular_color = float3(1.f, 1.f, 1.f);
-
-		float scene_rel_distance;
-		bool obstructed = raymarch_scene_obstruction(pos - normal * shadow_eps, -lighting_dir, 100.f, scene_rel_distance);
-		if (obstructed)
-		{
-			diffuse_shading = 0.f;
-			specular_shading = 0.f;
-		}
-
-		col = diffuse_color * (diffuse_shading + ambient_lighting_factor) + specular_color * specular_shading;
-	}
-	return float4(color_multiplier * (col + extra_color), 1.f);
-}*/
 
 struct Ray
 {
@@ -180,10 +69,34 @@ struct Ray
 #define OBJECT(distance) output_scene_distance = min(output_scene_distance, distance)
 #define MATERIAL(distance) (abs(distance) < dist_eps)
 
+// the actual scene now
 #include "sdf_scene.hlsl"
+
+float3 get_debug_plane_point()
+{
+	float debug_plane_point_x = VAR_debug_x(min = -10, max = +10, step = 0.05);
+	float debug_plane_point_y = VAR_debug_y(min = -10, max = +10, step = 0.05);
+	float debug_plane_point_z = VAR_debug_z(min = -10, max = +10, step = 0.05);
+
+	return float3(debug_plane_point_x, debug_plane_point_y, debug_plane_point_z);
+}
+
+float3 get_debug_plane_normal()
+{
+	float debug_plane_normal_x = VAR_debug_nx(min = -1, max = +1, step = 0.05);
+	float debug_plane_normal_y = VAR_debug_ny(min = -1, max = +1, step = 0.05);
+	float debug_plane_normal_z = VAR_debug_nz(min = -1, max = +1, step = 0.05);
+
+	float3 debug_plane_normal = float3(debug_plane_normal_x, debug_plane_normal_y, debug_plane_normal_z);
+
+	return any(debug_plane_normal) ? normalize(debug_plane_normal) : 0.f;
+}
 
 float map_geometry(GeometryInput geometry, MarchingInput march)
 {
+	float3 debug_plane_point = get_debug_plane_point();
+	float3 debug_plane_normal = get_debug_plane_normal();
+
 	float output_scene_distance = 3e38;
 
 	MaterialInput material_input = (MaterialInput)0;
@@ -204,6 +117,11 @@ float map_geometry(GeometryInput geometry, MarchingInput march)
 
 void map_material(GeometryInput geometry, MaterialInput material_input, inout MaterialOutput material_output)
 {
+	float3 debug_plane_point = get_debug_plane_point();
+	float3 debug_plane_normal = get_debug_plane_normal();
+
+	float debug_plane_scale = VAR_debug_scale(min = 0.01, max = 2, step = 0.01);
+
 	float output_scene_distance = 3e38;
 	MarchingInput march = (MarchingInput)0;
 	float distance_debug_plane = sdPlaneFast(geometry.pos - debug_plane_point, geometry.dir, debug_plane_normal);
@@ -216,7 +134,7 @@ void map_material(GeometryInput geometry, MaterialInput material_input, inout Ma
 		map(geometry, march, material_input_dummy, material_output_dummy, true, output_scene_distance);
 
 		material_output.material_id = MATERIAL_DISTANCE_PLANE;
-		material_output.material_properties.x = output_scene_distance;
+		material_output.material_properties.x = output_scene_distance / debug_plane_scale;
 	}
 	else
 	{
@@ -485,7 +403,7 @@ void ps_main(ps_input input, out ps_output output)
 			}
 			else if (material_output.material_id == MATERIAL_DISTANCE_PLANE)
 			{
-				color += debug_plane_color(material_output.material_properties.x / debug_ruler_scale);
+				color += debug_plane_color(material_output.material_properties.x);
 				use_light = false;
 				hdr_output = 0.f;
 			}
