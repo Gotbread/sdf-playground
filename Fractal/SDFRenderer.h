@@ -30,7 +30,7 @@ private:
 	{
 		alignas(16) Math3D::Vector3 eye;
 		alignas(16) Math3D::Vector3 front_vec, right_vec, top_vec;
-		float stime;
+		alignas(16) float stime;
 	};
 
 	Graphics *graphics = nullptr;
