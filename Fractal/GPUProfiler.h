@@ -33,7 +33,7 @@ public:
 	bool fetchResults();
 	std::map<std::string, float> getResults();
 private:
-	enum QueryState
+	enum class QueryState
 	{
 		Ready, // the queries are ready to be used
 		Fetching, // GPU is still busy
@@ -55,7 +55,7 @@ private:
 		std::vector<NamedQuery> queries;
 		// the last query that was queried, or -1
 		int last_query_index = -1;
-		QueryState state = Ready;
+		QueryState state = QueryState::Ready;
 	} sets[2]; // double buffered, one active, one polling
 	QuerySet *active, *inactive; // pointers for easier access
 

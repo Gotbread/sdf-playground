@@ -5,20 +5,24 @@
 class Camera
 {
 public:
-	enum CameraMode {CameraModeFPS, CameraModeFlight};
+	enum class CameraMode
+	{
+		FPS,
+		Flight
+	};
 
 	Camera();
 
 	void SetCameraMode(CameraMode);
-	CameraMode GetCameraMode();
+	CameraMode GetCameraMode() const;
 
 	void SetEye(const Math3D::Vector3 &eye);
 	const Math3D::Vector3 &GetEye() const;
 	void SetLookat(const Math3D::Vector3 &lookat);
 	void SetDirection(const Math3D::Vector3 &direction);
 	const Math3D::Vector3 &GetDirection() const;
-	const Math3D::Vector3 GetRelXAxis() const; // scaled to unity
-	const Math3D::Vector3 GetRelYAxis() const;
+	Math3D::Vector3 GetRelXAxis() const; // scaled to unity
+	Math3D::Vector3 GetRelYAxis() const;
 	void SetAspect(float);
 	float GetAspect() const;
 	void SetFOVY(float);

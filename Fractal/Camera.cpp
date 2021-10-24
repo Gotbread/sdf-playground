@@ -1,7 +1,7 @@
 #include "Camera.h"
 #include <math.h>
 
-Camera::Camera() : mode(CameraModeFPS)
+Camera::Camera() : mode(CameraMode::FPS)
 {
 }
 void Camera::SetCameraMode(Camera::CameraMode p_mode)
@@ -9,7 +9,7 @@ void Camera::SetCameraMode(Camera::CameraMode p_mode)
 	mode = p_mode;
 	up = Math3D::Vector3(0.f, 1.f, 0.f);
 }
-Camera::CameraMode Camera::GetCameraMode()
+Camera::CameraMode Camera::GetCameraMode() const
 {
 	return mode;
 }
@@ -33,16 +33,16 @@ const Math3D::Vector3 &Camera::GetDirection() const
 {
 	return dir;
 }
-const Math3D::Vector3 Camera::GetRelXAxis() const
+Math3D::Vector3 Camera::GetRelXAxis() const
 {
-	if (mode == CameraModeFPS)
+	if (mode == CameraMode::FPS)
 		return (Math3D::Vector3(0.f, 1.f, 0.f) ^ dir).Normalized();
 	else
 		return (up ^ dir).Normalized();
 }
-const Math3D::Vector3 Camera::GetRelYAxis() const
+Math3D::Vector3 Camera::GetRelYAxis() const
 {
-	if (mode == CameraModeFPS)
+	if (mode == CameraMode::FPS)
 		return (dir ^ GetRelXAxis()).Normalized();
 	else
 		return up.Normalized();
@@ -106,7 +106,7 @@ float Camera::GetMinXAngle() const
 void Camera::RotateX(float ang)
 {
 	Math3D::Vector3 xaxis = GetRelXAxis();
-	if (mode == CameraModeFPS)
+	if (mode == CameraMode::FPS)
 	{
 		float curr_ang = atan2f(dir.y, sqrtf(dir.x * dir.x + dir.z * dir.z));
 		if (ang > 0.f) // pos
@@ -131,7 +131,7 @@ void Camera::RotateX(float ang)
 }
 void Camera::RotateY(float ang)
 {
-	if (mode == CameraModeFPS)
+	if (mode == CameraMode::FPS)
 	{
 		Math3D::Matrix4x4 rot = Math3D::Matrix4x4::RotationYMatrix(ang);
 		dir = (rot * dir).Normalized();
@@ -148,7 +148,7 @@ void Camera::MoveAbs(const Math3D::Vector3 &vec)
 }
 void Camera::MoveRel(const Math3D::Vector3 &vec)
 {
-	Math3D::Vector3 yaxis = mode == CameraModeFPS ? Math3D::Vector3(0.f, 1.f, 0.f) : GetRelYAxis();
+	Math3D::Vector3 yaxis = mode == CameraMode::FPS ? Math3D::Vector3(0.f, 1.f, 0.f) : GetRelYAxis();
 	Math3D::Vector3 xaxis = GetRelXAxis();
 	Math3D::Vector3 change = dir * vec.z + yaxis * vec.y + xaxis * vec.x;
 	MoveAbs(change);
@@ -166,7 +166,7 @@ Math3D::Vector3 Camera::GetFrustrumEdge(unsigned index) const
 }
 Math3D::Matrix4x4 Camera::GetViewMatrix() const
 {
-	if (mode == CameraModeFPS)
+	if (mode == CameraMode::FPS)
 	{
 		Math3D::Vector3 new_up = Math3D::Vector3(0.f, 1.f, 0.f);
 		return Math3D::Matrix4x4::CameraMatrix(eye, eye + dir, Math3D::Matrix4x4::RotationAxisMatrix(dir, roll) * new_up);

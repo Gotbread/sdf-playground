@@ -208,7 +208,7 @@ bool Application::initGraphics()
 		return false;
 	}
 
-	camera.SetCameraMode(Camera::CameraModeFPS);
+	camera.SetCameraMode(Camera::CameraMode::FPS);
 	camera.SetAspect(width / height);
 	camera.SetFOVY(ToRadian(60));
 	camera.SetNearPlane(1.f);

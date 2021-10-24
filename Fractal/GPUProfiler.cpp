@@ -1,8 +1,9 @@
 #include "GPUProfiler.h"
 
 #include <algorithm>
+#include <ranges>
 
-GPUProfiler::GPUProfiler()
+GPUProfiler::GPUProfiler() : dev(nullptr), ctx(nullptr)
 {
 	// set up both pointers
 	active = &sets[0];
@@ -20,7 +21,7 @@ void GPUProfiler::beginFrame()
 	ensureQueryExists(nullptr);
 	
 	// only if we are ready
-	if (active->state == Ready)
+	if (active->state == QueryState::Ready)
 	{
 		ctx->Begin(active->query_frame);
 		ctx->End(active->query_begin);
@@ -31,13 +32,13 @@ void GPUProfiler::beginFrame()
 
 void GPUProfiler::endFrame()
 {
-	if (active->state == Ready)
+	if (active->state == QueryState::Ready)
 	{
 		ctx->End(active->query_end);
 		ctx->End(active->query_frame);
 
 		// set this state to busy
-		active->state = Fetching;
+		active->state = QueryState::Fetching;
 		// next set
 		std::swap(active, inactive);
 	}
@@ -46,7 +47,7 @@ void GPUProfiler::endFrame()
 void GPUProfiler::profile(const std::string &name)
 {
 	ensureQueryExists(&name);
-	if (active->state == Ready)
+	if (active->state == QueryState::Ready)
 	{
 		auto iter = getQueryByName(name);
 		ctx->End(iter->query);
@@ -58,7 +59,7 @@ void GPUProfiler::profile(const std::string &name)
 bool GPUProfiler::fetchResults()
 {
 	// try to read the data from the inactive set
-	if (active->state == Fetching)
+	if (active->state == QueryState::Fetching)
 	{
 		ID3D11Query *fixed_queries[] =
 		{
@@ -83,7 +84,7 @@ bool GPUProfiler::fetchResults()
 			}
 		}
 		// everyone okay
-		active->state = Finished;
+		active->state = QueryState::Finished;
 		return true;
 	}
 	return false;
@@ -91,9 +92,9 @@ bool GPUProfiler::fetchResults()
 
 std::map<std::string, float> GPUProfiler::getResults()
 {
-	if (active->state == Finished)
+	if (active->state == QueryState::Finished)
 	{
-		active->state = Ready;
+		active->state = QueryState::Ready;
 
 		D3D11_QUERY_DATA_TIMESTAMP_DISJOINT disjoint;
 		ctx->GetData(active->query_frame, &disjoint, sizeof(disjoint), 0);
@@ -109,7 +110,7 @@ std::map<std::string, float> GPUProfiler::getResults()
 			for (auto &query : active->queries)
 			{
 				UINT64 time;
-				HRESULT HR = ctx->GetData(query.query, &time, sizeof(time), 0);
+				ctx->GetData(query.query, &time, sizeof(time), 0);
 				results[query.name] = static_cast<float>(time - last_time) / disjoint.Frequency;
 				last_time = time;
 			}
@@ -133,7 +134,7 @@ void GPUProfiler::ensureQueryExists(const std::string *name)
 			Comptr<ID3D11Query> query;
 			dev->CreateQuery(&desc, &query);
 
-			active->queries.push_back({ *name, query });
+			active->queries.emplace_back(*name, query);
 		}
 	}
 	else // the mandatory ones
@@ -163,7 +164,7 @@ void GPUProfiler::ensureQueryExists(const std::string *name)
 
 std::vector<GPUProfiler::NamedQuery>::iterator GPUProfiler::getQueryByName(const std::string &name)
 {
-	return std::find_if(active->queries.begin(), active->queries.end(), [&name](auto &entry)
+	return std::ranges::find_if(active->queries, [&name](auto &entry)
 	{
 		return entry.name == name;
 	});
