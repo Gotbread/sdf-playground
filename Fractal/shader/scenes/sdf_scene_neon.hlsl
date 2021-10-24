@@ -1,6 +1,6 @@
 #include "sdf_primitives.hlsl"
 #include "sdf_ops.hlsl"
-#include "user_variables.hlsl"
+#include "sdf_common.hlsl"
 
 float sdRingsphere(float3 pos, float spacing, float r1, float r2)
 {
@@ -15,62 +15,64 @@ float sdRingsphere(float3 pos, float spacing, float r1, float r2)
 	return length(pos - hit_point) - r2;
 }
 
-// params:
-// pos.xyz: 3D position in the scene
-// pos.w: one when rendering with transparent objects, zero without
-// 
-// dir: input normal. normalized to 1 for normal passes, zero for gradient-only passes
-// 
-// return value:
-// x: scene distance
-// y: material ID
-//
-// material_property:
-// extra vector, meaning depends on material
-float2 map(float4 pos, float3 dir, out float3 material_property)
+void map(GeometryInput geometry, MarchingInput march, MaterialInput material_input, inout MaterialOutput material_output, bool geometry_step, inout float output_scene_distance)
 {
+	map_groundplane(geometry, material_output, geometry_step, output_scene_distance);
+
 	float r1 = VAR_r1(min = 0.2, max = 2, start = 1);
 	float r2 = VAR_r2(min = 0.005, max = 0.1, start = 0.01);
 	float spacing = VAR_spacing(min = 0.01, max = 0.2, start = 0.1);
 
-	float obj = sdRingsphere(pos.xyz - float3(0.f, 2.f, 0.f), spacing, r1, r2);
+	float ringsphere = sdRingsphere(geometry.pos.xyz - float3(0.f, 2.f, 0.f), spacing, r1, r2);
 
-	float3 mirror_pos = pos.xyz - float3(0.f, 2.f, 2.75f);
+	float3 mirror_pos = geometry.pos.xyz - float3(0.f, 2.f, 2.75f);
 	mirror_pos.xz = opRotate(mirror_pos.xz, 0.3f);
 	float mirror = sdBox(mirror_pos, float3(1.f, 1.7f, 0.05f));
 	float mirror_border = sdBox(mirror_pos, float3(1.05f, 1.75f, 0.04f));
 
-	// floor
-	float floor1 = sdPlaneFast(pos.xyz, dir, float3(0.f, 1.f, 0.f));
-
-	// select
-	if (mirror_border < mirror && mirror_border < obj && mirror_border < floor1)
+	if (geometry_step)
 	{
-		material_property = float3(0.5f, 0.5f, 0.5f);
-		return float2(mirror_border, 3.f);
-	}
-	else if (mirror < obj && mirror < floor1)
-	{
-		material_property = float3(0.8f, 0.8f, 0.8f);
-		return float2(mirror, 50.f);
-	}
-	else if (obj < floor1)
-	{
-		float r = VAR_red(min = 0, max = 1, start = 0.1, step = 0.05);
-		float g = VAR_green(min = 0, max = 3, start = 1.0, step = 0.05);
-		float b = VAR_blue(min = 0, max = 1, start = 0.2, step = 0.05);
-		material_property = float3(r, g, b);
-		return float2(obj, 3.f);
+		OBJECT(ringsphere);
+		OBJECT(mirror);
+		OBJECT(mirror_border);
 	}
 	else
 	{
-		float2 tile_pos = floor(pos.xz);
-		float2 tile_local_pos = 0.5f - abs(pos.xz - tile_pos - 0.5f);
-		float tile_parity = round(frac((tile_pos.x + tile_pos.y) * 0.5f + 0.25f));
-		material_property = tile_parity > 0.5f ? float3(0.1f, 0.1f, 0.1f) : float3(0.8f, 0.8f, 0.8f);
-		if (tile_local_pos.x < 0.0125f || tile_local_pos.y < 0.0125f)
-			material_property = float3(0.45f, 0.45f, 0.45f);
+		if (MATERIAL(ringsphere))
+		{
+			float r = VAR_red(min = 0, max = 1, start = 0.1, step = 0.05);
+			float g = VAR_green(min = 0, max = 3, start = 1.0, step = 0.05);
+			float b = VAR_blue(min = 0, max = 1, start = 0.2, step = 0.05);
 
-		return float2(floor1, 3.f);
+			material_output.emissive_color.rgb = float3(r, g, b);
+			material_output.diffuse_color.rgb = float3(r, g, b) / 2;
+			material_output.specular_color.rgb = 0.5f;
+		}
+		else if (MATERIAL(mirror))
+		{
+			material_output.reflection_color.rgb = 0.8f;
+			material_output.specular_color.rgb = 0.1f;
+		}
+		else if (MATERIAL(mirror_border))
+		{
+			material_output.diffuse_color.rgb = float3(0.5f, 0.5f, 0.5f);
+			material_output.specular_color.rgb = 0.5f;
+		}
 	}
+}
+
+void map_normal(GeometryInput geometry, inout NormalOutput output)
+{
+}
+
+void map_light(GeometryInput input, inout LightOutput output[LIGHT_COUNT], inout float ambient_lighting_factor)
+{
+	output[0].used = true;
+	output[0].pos = float4(-1.f, -1.f, 2.f, 1.f);
+	output[0].color = float3(1.f, 1.f, 1.f);
+}
+
+float3 map_background(float3 dir, uint iter_count)
+{
+	return sky_color(dir, stime);
 }

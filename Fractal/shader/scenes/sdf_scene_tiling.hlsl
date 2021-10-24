@@ -111,16 +111,16 @@ void map(GeometryInput geometry, MarchingInput march, MaterialInput material_inp
 			float3 offset_right = geometry.right_ray_offset * geometry.camera_distance;
 			float3 offset_bottom = geometry.bottom_ray_offset * geometry.camera_distance;
 			// ===========
-			float2 tile_pos1 = get_tile_impact(geometry.pos, geometry.dir);
+			float2 tile_pos1 = get_tile_impact(geometry.pos, geometry.dir.xyz);
 			float4 color1 = tile_color_from_pos(tile_pos1);
 
-			float2 tile_pos2 = get_tile_impact(geometry.pos + offset_right, geometry.dir);
+			float2 tile_pos2 = get_tile_impact(geometry.pos + offset_right, geometry.dir.xyz);
 			float4 color2 = tile_color_from_pos(tile_pos2);
 
-			float2 tile_pos3 = get_tile_impact(geometry.pos + offset_bottom, geometry.dir);
+			float2 tile_pos3 = get_tile_impact(geometry.pos + offset_bottom, geometry.dir.xyz);
 			float4 color3 = tile_color_from_pos(tile_pos3);
 
-			float2 tile_pos4 = get_tile_impact(geometry.pos + offset_bottom + offset_right, geometry.dir);
+			float2 tile_pos4 = get_tile_impact(geometry.pos + offset_bottom + offset_right, geometry.dir.xyz);
 			float4 color4 = tile_color_from_pos(tile_pos4);
 
 			float total_dist = color1.w + color2.w + color3.w + color4.w;
@@ -146,7 +146,6 @@ void map_light(GeometryInput input, inout LightOutput output[LIGHT_COUNT], inout
 float3 map_background(float3 dir, uint iter_count)
 {
 	dir.xz = opRotate(dir.xz, -stime * 0.025f);
-	//return iter_count / 50.f;
 	float noiseval = turbulence(dir * float3(1.f, 6.f, 1.f) * 2.5f);
 	float3 color1 = float3(43.f, 164.f, 247.f) / 255.f;
 	float3 color2 = float3(212.f, 224.f, 238.f) / 255.f;

@@ -72,7 +72,7 @@ void map(GeometryInput geometry, MarchingInput march, MaterialInput material_inp
 			float3 offset_right = geometry.right_ray_offset * geometry.camera_distance;
 			float3 offset_bottom = geometry.bottom_ray_offset * geometry.camera_distance;
 			// ===========
-			float3 color = total_tile_color(geometry.pos, geometry.dir, offset_right, offset_bottom);
+			float3 color = total_tile_color(geometry.pos, geometry.dir.xyz, offset_right, offset_bottom);
 			// ============
 			material_output.diffuse_color = float4(color, 1.f);
 			material_output.specular_color.rgb = 1.f;

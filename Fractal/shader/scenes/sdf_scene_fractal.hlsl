@@ -1,8 +1,8 @@
 #include "sdf_primitives.hlsl"
-
+#include "sdf_ops.hlsl"
+#include "sdf_common.hlsl"
 
 // changes the entries around so x is biggest, then y, then z
-
 float3 sort_components(float3 vec)
 {
 	if (vec.z > vec.y)
@@ -14,36 +14,26 @@ float3 sort_components(float3 vec)
 	return vec;
 }
 
-// params:
-// pos.xyz: 3D position in the scene
-// pos.w: one when rendering with transparent objects, zero without
-// 
-// dir: input normal. normalized to 1 for normal passes, zero for gradient-only passes
-// 
-// return value:
-// x: scene distance
-// y: material ID
-//
-// material_property:
-// extra vector, meaning depends on material
-float2 map(float4 pos, float3 dir, out float3 material_property)
+void map(GeometryInput geometry, MarchingInput march, MaterialInput material_input, inout MaterialOutput material_output, bool geometry_step, inout float output_scene_distance)
 {
+	map_groundplane(geometry, material_output, geometry_step, output_scene_distance);
+
 	float size = 1.f;
-	float3 fractal_pos = pos.xyz - float3(0.f, 1.f, 0.f);
+	float3 fractal_pos = geometry.pos - float3(0.f, 1.f, 0.f);
 	float g = 0.7f;
 
-	float d = 1e30;
+	float fractal = 1e30;
 	float scale = 1.f;
 	float iters_needed = 0.f;
 
 	for (int i = 0; i < 8; ++i)
 	{
 		float new_d = sdBox(fractal_pos, size * 0.5f) / scale;
-		if (new_d < 0.0001f && d > 0.0001f)
+		if (new_d < 0.0001f && fractal > 0.0001f)
 		{
 			iters_needed = (float)i;
 		}
-		d = min(d, new_d);
+		fractal = min(fractal, new_d);
 
 		// all 6 sides
 		fractal_pos = abs(fractal_pos);
@@ -57,28 +47,37 @@ float2 map(float4 pos, float3 dir, out float3 material_property)
 		fractal_pos.yxz = sort_components(fractal_pos.yxz);
 		fractal_pos.y -= size / 3.f;
 
-
 		// recursion
 		fractal_pos *= 3.f;
 		scale *= 3.f;
 	}
 
-	float obj = d;
-
-	// floor
-	float floor1 = sdPlaneFast(pos.xyz, dir, float3(0.f, 1.f, 0.f));
-
-	// select
-	if (obj < floor1)
+	if (geometry_step)
 	{
-		material_property = float3(0.9f, g, iters_needed * 0.125f);
-		return float2(obj, 3.f);
+		OBJECT(fractal);
 	}
 	else
 	{
-		float2 tile_pos = floor(pos.xz);
-		float tile_parity = round(frac((tile_pos.x + tile_pos.y) * 0.5f + 0.25f));
-		material_property = tile_parity > 0.5f ? float3(0.1f, 0.1f, 0.1f) : float3(0.8f, 0.8f, 0.8f);
-		return float2(floor1, 3.f);
+		if (MATERIAL(fractal))
+		{
+			material_output.diffuse_color.xyz = float3(0.9f, g, iters_needed * 0.125f);
+			material_output.specular_color.rgb = 0.5f;
+		}
 	}
+}
+
+void map_normal(GeometryInput geometry, inout NormalOutput output)
+{
+}
+
+void map_light(GeometryInput input, inout LightOutput output[LIGHT_COUNT], inout float ambient_lighting_factor)
+{
+	output[0].used = true;
+	output[0].pos = float4(-1.f, -1.f, 2.f, 1.f);
+	output[0].color = float3(1.f, 1.f, 1.f);
+}
+
+float3 map_background(float3 dir, uint iter_count)
+{
+	return sky_color(dir, stime);
 }
