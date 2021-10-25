@@ -45,14 +45,17 @@ struct Ray
 	float inside_sign;
 	float3 last_transparent_pos;
 	bool has_transparent;
+	float3 shadow_contribution;
+	float shadow_range;
+	bool is_shadow_ray;
 	uint depth;
 };
 
 // must be bigger than bounce count
 #define INVALID_DEPTH 1000000
 
-#define BOUNCE_COUNT 8
-#define RAY_COUNT 3
+#define BOUNCE_COUNT 16
+#define RAY_COUNT 8
 #define ITER_COUNT 100
 #define LIGHT_COUNT 8
 #define RANGE 100.f
@@ -257,6 +260,9 @@ void ps_main(ps_input input, out ps_output output)
 	rays[0].inside_sign = 1.f;
 	rays[0].last_transparent_pos = float3(0.f, 0.f, 0.f);
 	rays[0].has_transparent = false;
+	rays[0].shadow_contribution = float3(0.f, 0.f, 0.f);
+	rays[0].shadow_range = 0.f;
+	rays[0].is_shadow_ray = false;
 	rays[0].depth = 0;
 	uint ray_count = 1;
 
@@ -271,9 +277,7 @@ void ps_main(ps_input input, out ps_output output)
 			break;
 		}
 
-		uint current_ray_depth = rays[ray_index].depth; // save for later
-		float3 ray_contribution = rays[ray_index].contribution; // save for later
-		float inside_sign = rays[ray_index].inside_sign;
+		Ray current_ray = rays[ray_index];
 
 		rays[ray_index].depth = INVALID_DEPTH; // disable original ray
 		--ray_count;
@@ -290,11 +294,14 @@ void ps_main(ps_input input, out ps_output output)
 		marching_input.is_inside = false;
 		marching_input.has_transparent = rays[ray_index].has_transparent;
 		marching_input.last_transparent_pos = rays[ray_index].last_transparent_pos;
-		marching_input.is_shadow_pass = false;
+		marching_input.is_shadow_pass = current_ray.is_shadow_ray;
+
+		float max_range = current_ray.is_shadow_ray ? rays[ray_index].shadow_range : RANGE;
 
 		uint iter_count;
 		float scene_distance;
-		if (march_ray(geometry_input, marching_input, RANGE, inside_sign, iter_count, scene_distance))
+		bool scene_hit = march_ray(geometry_input, marching_input, max_range, current_ray.inside_sign, iter_count, scene_distance);
+		if (scene_hit)
 		{
 			// calculate the normal, first pass
 			NormalOutput normal_output;
@@ -306,7 +313,7 @@ void ps_main(ps_input input, out ps_output output)
 			map_normal(geometry_input, normal_output);
 			if (!normal_output.use_normal)
 			{
-				normal_output.normal = grad(geometry_input, marching_input, scene_distance * inside_sign, normal_output.normal_sample_dist);
+				normal_output.normal = grad(geometry_input, marching_input, scene_distance * current_ray.inside_sign, normal_output.normal_sample_dist);
 			}
 
 			// get the material
@@ -332,226 +339,285 @@ void ps_main(ps_input input, out ps_output output)
 
 			map_material(geometry_input, material_input, material_output);
 
-			// change the hdr output to what the material wants, but only in the first iteration
-			float new_hdr = material_output.use_hdr ? 1.f : 0.f;
-			hdr_output = lerp(hdr_output, new_hdr, step(hdr_output, 0.f));
-			
-			// get the new normal
-			float3 new_normal = lerp(normal_output.normal, material_output.normal.xyz, material_output.normal.w);
-
-			// do we have reflection?
-			if (any(material_output.reflection_color) && inside_sign > 0.f && current_ray_depth + 3 < material_output.max_cost) // only if we are an outside ray
+			if (!current_ray.is_shadow_ray)
 			{
-				if (ray_count < RAY_COUNT)
+				// change the hdr output to what the material wants, but only in the first iteration
+				float new_hdr = material_output.use_hdr ? 1.f : 0.f;
+				hdr_output = lerp(hdr_output, new_hdr, step(hdr_output, 0.f));
+
+				// get the new normal, second pass
+				float3 new_normal = lerp(normal_output.normal, material_output.normal.xyz, material_output.normal.w);
+
+				// do we have reflection?
+				if (any(material_output.reflection_color) && current_ray.inside_sign > 0.f && current_ray.depth + 3 < material_output.max_cost) // only if we are an outside ray
 				{
-					uint new_ray_index = find_free_ray(rays);
-
-					float3 ref_vec = reflect(geometry_input.dir.xyz, new_normal);
-					// start a new ray
-
-					rays[new_ray_index].pos = geometry_input.pos + ref_vec * reflect_eps;
-					rays[new_ray_index].dir = ref_vec;
-					rays[new_ray_index].contribution = material_output.reflection_color * ray_contribution;
-					rays[new_ray_index].inside_sign = 1.f;
-					rays[new_ray_index].last_transparent_pos = float3(0.f, 0.f, 0.f);
-					rays[new_ray_index].has_transparent = false;
-					rays[new_ray_index].depth = current_ray_depth + 3;
-					++ray_count;
-				}
-			}
-
-			// do we have refraction?
-			if (any(material_output.refraction_color) && current_ray_depth + 4 < material_output.max_cost)
-			{
-				if (ray_count < RAY_COUNT)
-				{
-					uint new_ray_index = find_free_ray(rays);
-
-					if (inside_sign > 0.f) // just entering the material
+					if (ray_count < RAY_COUNT)
 					{
-						float3 ref_vec = refract(geometry_input.dir.xyz, new_normal, 1.f / material_output.optical_index);
+						uint new_ray_index = find_free_ray(rays);
+
+						float3 ref_vec = reflect(geometry_input.dir.xyz, new_normal);
 						// start a new ray
 
-						rays[new_ray_index].pos = geometry_input.pos + ref_vec * refract_eps;
+						rays[new_ray_index].pos = geometry_input.pos + ref_vec * reflect_eps;
 						rays[new_ray_index].dir = ref_vec;
-						rays[new_ray_index].contribution = material_output.refraction_color * ray_contribution;
-						rays[new_ray_index].inside_sign = -1.f;
-						rays[new_ray_index].last_transparent_pos = float3(0.f, 0.f, 0.f);
-						rays[new_ray_index].has_transparent = false;
-						rays[new_ray_index].depth = current_ray_depth + 2;
-					}
-					else // leaving the material
-					{
-						float3 ref_vec = refract(geometry_input.dir.xyz, -new_normal, material_output.optical_index);
-						// start a new ray
-
-						rays[new_ray_index].pos = geometry_input.pos + ref_vec * refract_eps;
-						rays[new_ray_index].dir = ref_vec;
-						rays[new_ray_index].contribution = material_output.refraction_color * ray_contribution;
+						rays[new_ray_index].contribution = material_output.reflection_color * current_ray.contribution;
 						rays[new_ray_index].inside_sign = 1.f;
 						rays[new_ray_index].last_transparent_pos = float3(0.f, 0.f, 0.f);
 						rays[new_ray_index].has_transparent = false;
-						rays[new_ray_index].depth = current_ray_depth + 2;
+						rays[new_ray_index].shadow_contribution = float3(0.f, 0.f, 0.f);
+						rays[new_ray_index].shadow_range = 0.f;
+						rays[new_ray_index].is_shadow_ray = false;
+						rays[new_ray_index].depth = current_ray.depth + 3;
+						++ray_count;
 					}
-					++ray_count;
-				}
-			}
-
-			if (material_output.diffuse_color.a < 1.f && current_ray_depth + 2 < material_output.max_cost)
-			{
-				if (ray_count < RAY_COUNT)
-				{
-					uint new_ray_index = find_free_ray(rays);
-
-					rays[new_ray_index].pos = geometry_input.pos;
-					rays[new_ray_index].dir = geometry_input.dir.xyz;
-					rays[new_ray_index].contribution = (1.f - material_output.diffuse_color.a) * material_output.diffuse_color.rgb * ray_contribution;
-					rays[new_ray_index].inside_sign = 1.f;
-					rays[new_ray_index].last_transparent_pos = geometry_input.pos;
-					rays[new_ray_index].has_transparent = true;
-					rays[new_ray_index].depth = current_ray_depth + 2;
-					++ray_count;
-				}
-			}
-
-			float3 diffuse_color = material_output.diffuse_color.rgb;
-			float3 color = float3(0.f, 0.f, 0.f);
-
-			bool use_light = true;
-			// handle material
-			if (material_output.material_id == MATERIAL_ITER)
-			{
-				color += iter_count_to_color(iter_count, ITER_COUNT - 1);
-				use_light = false;
-				hdr_output = 0.f;
-			}
-			else if (material_output.material_id == MATERIAL_PLAIN)
-			{
-				color += diffuse_color;
-				use_light = false;
-			}
-			else if (material_output.material_id == MATERIAL_NORMAL1)
-			{
-				float3 normal_color = max(0.01f, new_normal);// *0.5f + 0.5f;
-				normal_color = normal_color / max(max(normal_color.r, normal_color.g), normal_color.b);
-				color += normal_color;
-				use_light = false;
-				hdr_output = 0.f;
-			}
-			else if (material_output.material_id == MATERIAL_NORMAL2)
-			{
-				float3 normal_color = abs(new_normal);
-				color += normal_color;
-				use_light = false;
-				hdr_output = 0.f;
-			}
-			else if (material_output.material_id == MATERIAL_DISTANCE_PLANE)
-			{
-				color += debug_plane_color(material_output.material_properties.x);
-				use_light = false;
-				hdr_output = 0.f;
-			}
-			else if (material_output.material_id == MATERIAL_WOOD)
-			{
-				diffuse_color += wood(material_output.material_position.xyz);
-			}
-			else if (material_output.material_id == MATERIAL_MARBLE_DARK)
-			{
-				diffuse_color += marble(material_output.material_position.xyz, float3(0.556f, 0.478f, 0.541f));
-			}
-			else if (material_output.material_id == MATERIAL_MARBLE_LIGHT)
-			{
-				diffuse_color += marble(material_output.material_position.xyz, float3(0.7f, 0.7f, 0.7f));
-			}
-
-			if (use_light)
-			{
-				LightOutput light_output[LIGHT_COUNT];
-				for (uint i1 = 0; i1 < LIGHT_COUNT; ++i1)
-				{
-					light_output[i1].used = false;
-					light_output[i1].pos = float4(0.f, 0.f, 0.f, 0.f);
-					light_output[i1].color = float3(0.f, 0.f, 0.f);
-					light_output[i1].falloff = 0.f;
-					light_output[i1].extend = 0.f;
 				}
 
-				float ambient_lighting_factor = 0.075f;
-				map_light(geometry_input, light_output, ambient_lighting_factor);
-
-				// adjust for shadow eps
-				float3 view_dir = geometry_input.dir.xyz;
-				float shadow_move_distance = max(shadow_eps, normal_output.normal_sample_dist) + max(0.f, -scene_distance);
-				float3 scene_pos = geometry_input.pos + new_normal * shadow_move_distance;
-
-				marching_input.is_shadow_pass = true;
-
-				// handle all lights
-				for (uint i2 = 0; i2 < LIGHT_COUNT; ++i2)
+				// do we have refraction?
+				if (any(material_output.refraction_color) && current_ray.depth + 4 < material_output.max_cost)
 				{
-					if (light_output[i2].used)
+					if (ray_count < RAY_COUNT)
 					{
-						// get light dir
-						float3 lighting_dir;
-						float distance_to_trace;
-						float falloff_factor = 1.f;
-						if (light_output[i2].pos.w == 1.f) // directional light
+						uint new_ray_index = find_free_ray(rays);
+
+						if (current_ray.inside_sign > 0.f) // just entering the material
 						{
-							lighting_dir = light_output[i2].pos.xyz;
-							lighting_dir /= length(lighting_dir) + dist_eps;
-							distance_to_trace = RANGE; // reasonable default
+							float3 ref_vec = refract(geometry_input.dir.xyz, new_normal, 1.f / material_output.optical_index);
+							// start a new ray
+
+							rays[new_ray_index].pos = geometry_input.pos + ref_vec * refract_eps;
+							rays[new_ray_index].dir = ref_vec;
+							rays[new_ray_index].contribution = material_output.refraction_color * current_ray.contribution;
+							rays[new_ray_index].inside_sign = -1.f;
+							rays[new_ray_index].last_transparent_pos = float3(0.f, 0.f, 0.f);
+							rays[new_ray_index].has_transparent = false;
+							rays[new_ray_index].shadow_contribution = float3(0.f, 0.f, 0.f);
+							rays[new_ray_index].shadow_range = 0.f;
+							rays[new_ray_index].is_shadow_ray = false;
+							rays[new_ray_index].depth = current_ray.depth + 2;
 						}
-						else // point light
+						else // leaving the material
 						{
-							lighting_dir = scene_pos - light_output[i2].pos.xyz;
-							distance_to_trace = length(lighting_dir);
-							lighting_dir /= distance_to_trace;
-							distance_to_trace -= light_output[i2].extend;
+							float3 ref_vec = refract(geometry_input.dir.xyz, -new_normal, material_output.optical_index);
+							// start a new ray
 
-							falloff_factor = pow(0.1, light_output[i2].falloff);
+							rays[new_ray_index].pos = geometry_input.pos + ref_vec * refract_eps;
+							rays[new_ray_index].dir = ref_vec;
+							rays[new_ray_index].contribution = material_output.refraction_color * current_ray.contribution;
+							rays[new_ray_index].inside_sign = 1.f;
+							rays[new_ray_index].last_transparent_pos = float3(0.f, 0.f, 0.f);
+							rays[new_ray_index].has_transparent = false;
+							rays[new_ray_index].shadow_contribution = float3(0.f, 0.f, 0.f);
+							rays[new_ray_index].shadow_range = 0.f;
+							rays[new_ray_index].is_shadow_ray = false;
+							rays[new_ray_index].depth = current_ray.depth + 2;
 						}
-						float3 light_color = light_output[i2].color * falloff_factor;
+						++ray_count;
+					}
+				}
 
-						// handle the shadow first
-						geometry_input.pos = scene_pos;
-						geometry_input.dir = float4(-lighting_dir, 1.f);
+				// handle transparent material
+				if (material_output.diffuse_color.a < 1.f && current_ray.depth + 2 < material_output.max_cost)
+				{
+					if (ray_count < RAY_COUNT)
+					{
+						uint new_ray_index = find_free_ray(rays);
 
-						uint iter_count_unused;
-						float scene_distance_unused;
-						bool obstructed = march_ray(geometry_input, marching_input, distance_to_trace, inside_sign, iter_count_unused, scene_distance_unused);
-						if (!obstructed)
+						rays[new_ray_index].pos = geometry_input.pos;
+						rays[new_ray_index].dir = geometry_input.dir.xyz;
+						rays[new_ray_index].contribution = (1.f - material_output.diffuse_color.a) * material_output.diffuse_color.rgb * current_ray.contribution;
+						rays[new_ray_index].inside_sign = 1.f;
+						rays[new_ray_index].last_transparent_pos = geometry_input.pos;
+						rays[new_ray_index].has_transparent = true;
+						rays[new_ray_index].shadow_contribution = float3(0.f, 0.f, 0.f);
+						rays[new_ray_index].shadow_range = 0.f;
+						rays[new_ray_index].is_shadow_ray = false;
+						rays[new_ray_index].depth = current_ray.depth + 2;
+						++ray_count;
+					}
+				}
+
+				float3 diffuse_color = material_output.diffuse_color.rgb;
+				float3 color = float3(0.f, 0.f, 0.f);
+
+				bool use_light = true;
+				// handle material
+				if (material_output.material_id == MATERIAL_ITER)
+				{
+					color += iter_count_to_color(iter_count, ITER_COUNT - 1);
+					use_light = false;
+					hdr_output = 0.f;
+				}
+				else if (material_output.material_id == MATERIAL_PLAIN)
+				{
+					color += diffuse_color;
+					use_light = false;
+				}
+				else if (material_output.material_id == MATERIAL_NORMAL1)
+				{
+					float3 normal_color = max(0.01f, new_normal);// *0.5f + 0.5f;
+					normal_color = normal_color / max(max(normal_color.r, normal_color.g), normal_color.b);
+					color += normal_color;
+					use_light = false;
+					hdr_output = 0.f;
+				}
+				else if (material_output.material_id == MATERIAL_NORMAL2)
+				{
+					float3 normal_color = abs(new_normal);
+					color += normal_color;
+					use_light = false;
+					hdr_output = 0.f;
+				}
+				else if (material_output.material_id == MATERIAL_DISTANCE_PLANE)
+				{
+					color += debug_plane_color(material_output.material_properties.x);
+					use_light = false;
+					hdr_output = 0.f;
+				}
+				else if (material_output.material_id == MATERIAL_WOOD)
+				{
+					diffuse_color += wood(material_output.material_position.xyz);
+				}
+				else if (material_output.material_id == MATERIAL_MARBLE_DARK)
+				{
+					diffuse_color += marble(material_output.material_position.xyz, float3(0.556f, 0.478f, 0.541f));
+				}
+				else if (material_output.material_id == MATERIAL_MARBLE_LIGHT)
+				{
+					diffuse_color += marble(material_output.material_position.xyz, float3(0.7f, 0.7f, 0.7f));
+				}
+
+				if (use_light)
+				{
+					LightOutput light_output[LIGHT_COUNT];
+					for (uint i1 = 0; i1 < LIGHT_COUNT; ++i1)
+					{
+						light_output[i1].used = false;
+						light_output[i1].pos = float4(0.f, 0.f, 0.f, 0.f);
+						light_output[i1].color = float3(0.f, 0.f, 0.f);
+						light_output[i1].falloff = 0.f;
+						light_output[i1].extend = 0.f;
+					}
+
+					float ambient_lighting_factor = 0.075f;
+					map_light(geometry_input, light_output, ambient_lighting_factor);
+
+					// adjust for shadow eps
+					float3 view_dir = geometry_input.dir.xyz;
+					float shadow_move_distance = max(shadow_eps, normal_output.normal_sample_dist) + max(0.f, -scene_distance);
+					float3 scene_pos = geometry_input.pos + new_normal * shadow_move_distance;
+
+					// handle all lights
+					for (uint i2 = 0; i2 < LIGHT_COUNT; ++i2)
+					{
+						if (light_output[i2].used)
 						{
+							// get light dir
+							float3 lighting_dir;
+							float distance_to_trace;
+							float falloff_factor = 1.f;
+							if (light_output[i2].pos.w == 1.f) // directional light
+							{
+								lighting_dir = light_output[i2].pos.xyz;
+								lighting_dir /= length(lighting_dir) + dist_eps;
+								distance_to_trace = RANGE; // reasonable default
+							}
+							else // point light
+							{
+								lighting_dir = scene_pos - light_output[i2].pos.xyz;
+								distance_to_trace = length(lighting_dir);
+								lighting_dir /= distance_to_trace;
+								distance_to_trace -= light_output[i2].extend;
+
+								falloff_factor = pow(0.1, light_output[i2].falloff);
+							}
+							float3 light_color = light_output[i2].color * falloff_factor;
+
+							// handle ambient
+							color += diffuse_color.rgb * light_color * ambient_lighting_factor;
+
+							// the next components (diffuse and specular) depend whether we are in a shadow or not
+							// so first sum up the would be influence and apply it later
+							float3 light_influenced_color = float3(0.f, 0.f, 0.f);
+
 							// handle diffuse color
 							float light_dot = saturate(dot(-new_normal, lighting_dir));
-							color += diffuse_color.rgb * light_color * light_dot;
+							light_influenced_color += diffuse_color.rgb * light_color * light_dot;
 
 							// handle specular
 							float3 half_vec = -normalize(view_dir + lighting_dir);
 							float specular_dot = saturate(dot(new_normal, half_vec));
 							float specular_factor = pow(specular_dot, material_output.specular_color.a);
 
-							color += material_output.specular_color.rgb * light_color * specular_factor;
+							light_influenced_color += material_output.specular_color.rgb * light_color * specular_factor;
+
+							// now handle the shadow with another ray
+							if (current_ray.depth + 2 < material_output.max_cost)
+							{
+								if (ray_count < RAY_COUNT)
+								{
+									uint new_ray_index = find_free_ray(rays);
+
+									rays[new_ray_index].pos = scene_pos;
+									rays[new_ray_index].dir = -lighting_dir;
+									rays[new_ray_index].contribution = float3(0.f, 0.f, 0.f);
+									rays[new_ray_index].inside_sign = 1.f;
+									rays[new_ray_index].last_transparent_pos = float3(0.f, 0.f, 0.f);
+									rays[new_ray_index].has_transparent = false;
+									rays[new_ray_index].shadow_contribution = light_influenced_color * current_ray.contribution * saturate(material_output.diffuse_color.a);
+									rays[new_ray_index].shadow_range = distance_to_trace;
+									rays[new_ray_index].is_shadow_ray = true;
+									rays[new_ray_index].depth = current_ray.depth + 2;
+									++ray_count;
+								}
+							}
 						}
-						// handle ambient
-						color += diffuse_color.rgb * light_color * ambient_lighting_factor;
 					}
+
+					// handle emissive color
+					color += material_output.emissive_color.rgb;
+
+					// modulate with alpha, but only if we are using lights
+					color *= saturate(material_output.diffuse_color.a);
 				}
 
-				// handle emissive color
-				color += material_output.emissive_color.rgb;
-
-				// modulate with alpha, but only if we are using lights
-				color *= saturate(material_output.diffuse_color.a);
+				output.color.rgb += color * current_ray.contribution;
 			}
+			else // shadow ray did not hit -> check why
+			{
+				// handle transparent material
+				if (material_output.diffuse_color.a < 1.f && current_ray.depth + 2 < material_output.max_cost)
+				{
+					if (ray_count < RAY_COUNT)
+					{
+						uint new_ray_index = find_free_ray(rays);
 
-			output.color.rgb += color * ray_contribution;
+						rays[new_ray_index].pos = geometry_input.pos;
+						rays[new_ray_index].dir = geometry_input.dir.xyz;
+						rays[new_ray_index].contribution = float3(0.f, 0.f, 0.f);
+						rays[new_ray_index].inside_sign = 1.f;
+						rays[new_ray_index].last_transparent_pos = geometry_input.pos;
+						rays[new_ray_index].has_transparent = true;
+						rays[new_ray_index].shadow_contribution = (1.f - material_output.diffuse_color.a) * material_output.diffuse_color.rgb * current_ray.shadow_contribution;
+						rays[new_ray_index].shadow_range = max_range - geometry_input.camera_distance; // reduce by the already traveled distance
+						rays[new_ray_index].is_shadow_ray = true;
+						rays[new_ray_index].depth = current_ray.depth + 2;
+						++ray_count;
+					}
+				}
+			}
 		}
-		else
+		else // scene not hit
 		{
-			float3 background_color = map_background(geometry_input.dir.xyz, iter_count);
-			output.color.rgb += background_color * ray_contribution;
+			if (current_ray.is_shadow_ray) // shadow ray missed -> light
+			{
+				output.color.rgb += current_ray.shadow_contribution;
+			}
+			else // normal ray missed -> background
+			{
+				float3 background_color = map_background(geometry_input.dir.xyz, iter_count);
+				output.color.rgb += background_color * current_ray.contribution;
+			}
 		}
-		// keep track of closest point relative to camera distance -> antialiasing
 	}
 
 	// hdr_output is either -1 (not set), 0 (disable), or 1 (enable)
