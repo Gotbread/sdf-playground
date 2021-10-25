@@ -43,6 +43,8 @@ struct Ray
 	float3 dir;
 	float3 contribution;
 	float inside_sign;
+	float3 last_transparent_pos;
+	bool has_transparent;
 	uint depth;
 };
 
@@ -68,6 +70,7 @@ struct Ray
 
 // makros for convenience
 #define OBJECT(distance) output_scene_distance = min(output_scene_distance, distance)
+#define OBJECT_TRANSPARENT(distance, distance_transparent) output_scene_distance = ((march.has_transparent && distance_transparent < dist_eps) ? output_scene_distance : min(output_scene_distance, distance))
 #define MATERIAL(distance) (abs(distance) < dist_eps)
 
 // the actual scene now
@@ -252,6 +255,8 @@ void ps_main(ps_input input, out ps_output output)
 	rays[0].dir = dir;
 	rays[0].contribution = float3(1.f, 1.f, 1.f);
 	rays[0].inside_sign = 1.f;
+	rays[0].last_transparent_pos = float3(0.f, 0.f, 0.f);
+	rays[0].has_transparent = false;
 	rays[0].depth = 0;
 	uint ray_count = 1;
 
@@ -283,8 +288,8 @@ void ps_main(ps_input input, out ps_output output)
 
 		MarchingInput marching_input;
 		marching_input.is_inside = false;
-		marching_input.has_transparent = false;
-		marching_input.last_transparent_pos = float3(0.f, 0.f, 0.f);
+		marching_input.has_transparent = rays[ray_index].has_transparent;
+		marching_input.last_transparent_pos = rays[ray_index].last_transparent_pos;
 		marching_input.is_shadow_pass = false;
 
 		uint iter_count;
@@ -315,7 +320,7 @@ void ps_main(ps_input input, out ps_output output)
 			material_output.material_position = float4(geometry_input.pos, 0.f);
 			material_output.material_properties = float4(0.f, 0.f, 0.f, 0.f);
 			material_output.diffuse_color = float4(0.f, 0.f, 0.f, 1.f);
-			material_output.specular_color = float4(0.f, 0.f, 0.f, 48.f);
+			material_output.specular_color = float4(0.f, 0.f, 0.f, 60.f);
 			material_output.emissive_color = float3(0.f, 0.f, 0.f);
 			material_output.reflection_color = float3(0.f, 0.f, 0.f); // no reflection
 			material_output.refraction_color = float3(0.f, 0.f, 0.f); // no refraction
@@ -348,6 +353,8 @@ void ps_main(ps_input input, out ps_output output)
 					rays[new_ray_index].dir = ref_vec;
 					rays[new_ray_index].contribution = material_output.reflection_color * ray_contribution;
 					rays[new_ray_index].inside_sign = 1.f;
+					rays[new_ray_index].last_transparent_pos = float3(0.f, 0.f, 0.f);
+					rays[new_ray_index].has_transparent = false;
 					rays[new_ray_index].depth = current_ray_depth + 3;
 					++ray_count;
 				}
@@ -369,6 +376,8 @@ void ps_main(ps_input input, out ps_output output)
 						rays[new_ray_index].dir = ref_vec;
 						rays[new_ray_index].contribution = material_output.refraction_color * ray_contribution;
 						rays[new_ray_index].inside_sign = -1.f;
+						rays[new_ray_index].last_transparent_pos = float3(0.f, 0.f, 0.f);
+						rays[new_ray_index].has_transparent = false;
 						rays[new_ray_index].depth = current_ray_depth + 2;
 					}
 					else // leaving the material
@@ -380,8 +389,27 @@ void ps_main(ps_input input, out ps_output output)
 						rays[new_ray_index].dir = ref_vec;
 						rays[new_ray_index].contribution = material_output.refraction_color * ray_contribution;
 						rays[new_ray_index].inside_sign = 1.f;
+						rays[new_ray_index].last_transparent_pos = float3(0.f, 0.f, 0.f);
+						rays[new_ray_index].has_transparent = false;
 						rays[new_ray_index].depth = current_ray_depth + 2;
 					}
+					++ray_count;
+				}
+			}
+
+			if (material_output.diffuse_color.a < 1.f && current_ray_depth + 2 < material_output.max_cost)
+			{
+				if (ray_count < RAY_COUNT)
+				{
+					uint new_ray_index = find_free_ray(rays);
+
+					rays[new_ray_index].pos = geometry_input.pos;
+					rays[new_ray_index].dir = geometry_input.dir.xyz;
+					rays[new_ray_index].contribution = (1.f - material_output.diffuse_color.a) * material_output.diffuse_color.rgb * ray_contribution;
+					rays[new_ray_index].inside_sign = 1.f;
+					rays[new_ray_index].last_transparent_pos = geometry_input.pos;
+					rays[new_ray_index].has_transparent = true;
+					rays[new_ray_index].depth = current_ray_depth + 2;
 					++ray_count;
 				}
 			}
@@ -511,6 +539,9 @@ void ps_main(ps_input input, out ps_output output)
 
 				// handle emissive color
 				color += material_output.emissive_color.rgb;
+
+				// modulate with alpha, but only if we are using lights
+				color *= saturate(material_output.diffuse_color.a);
 			}
 
 			output.color.rgb += color * ray_contribution;
