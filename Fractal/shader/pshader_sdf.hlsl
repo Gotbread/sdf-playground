@@ -59,8 +59,9 @@ struct Ray
 #define MATERIAL_NONE 0            // no material. just use the diffuse color with lighting. default case
 #define MATERIAL_PLAIN 1           // just use the diffuse color without lighting
 #define MATERIAL_ITER 2            // shows the iteration count as a heat map
-#define MATERIAL_NORMAL 3          // show the normal vector color coded
-#define MATERIAL_DISTANCE_PLANE 4  // the distance plane
+#define MATERIAL_NORMAL1 3         // show the normal vector color coded
+#define MATERIAL_NORMAL2 4         // show the normal vector abs color coded
+#define MATERIAL_DISTANCE_PLANE 5  // the distance plane
 #define MATERIAL_WOOD 20           // wood. uses the material_position
 #define MATERIAL_MARBLE_DARK 21    // dark marble. uses the material_position
 #define MATERIAL_MARBLE_LIGHT 22   // light marble. uses the material position
@@ -401,10 +402,17 @@ void ps_main(ps_input input, out ps_output output)
 				color += diffuse_color;
 				use_light = false;
 			}
-			else if (material_output.material_id == MATERIAL_NORMAL)
+			else if (material_output.material_id == MATERIAL_NORMAL1)
 			{
 				float3 normal_color = max(0.01f, new_normal);// *0.5f + 0.5f;
 				normal_color = normal_color / max(max(normal_color.r, normal_color.g), normal_color.b);
+				color += normal_color;
+				use_light = false;
+				hdr_output = 0.f;
+			}
+			else if (material_output.material_id == MATERIAL_NORMAL2)
+			{
+				float3 normal_color = abs(new_normal);
 				color += normal_color;
 				use_light = false;
 				hdr_output = 0.f;
@@ -445,7 +453,8 @@ void ps_main(ps_input input, out ps_output output)
 
 				// adjust for shadow eps
 				float3 view_dir = geometry_input.dir.xyz;
-				float3 scene_pos = geometry_input.pos + new_normal * max(shadow_eps, normal_output.normal_sample_dist);
+				float shadow_move_distance = max(shadow_eps, normal_output.normal_sample_dist) + max(0.f, -scene_distance);
+				float3 scene_pos = geometry_input.pos + new_normal * shadow_move_distance;
 
 				marching_input.is_shadow_pass = true;
 
