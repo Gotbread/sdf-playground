@@ -23,11 +23,11 @@ float3 wood(float3 pos)
 	return float3(0.3125f + sine_val, 0.117f + sine_val, 0.117f);
 }
 
-float3 fire(float3 pos, float threshold)
+float4 fire(float3 pos, float threshold)
 {
 	float turb = turbulence(pos) + 0.35f;
 	turb = turb > threshold ? turb : 0.f;
-	return float3(5.f, 2.f, 1.f) * turb;
+	return float4(5.f, 2.f, 1.f, 0.5f) * turb;
 }
 
 float2 voronoi_cell_offset(float2 cell_index)
