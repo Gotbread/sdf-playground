@@ -50,6 +50,10 @@ struct Ray
 	uint depth;
 };
 
+#define SCENE_HIT 0          // we did hit something
+#define SCENE_RANGE_LIMIT 1  // we terminated because we run out of range
+#define SCENE_ITER_LIMIT 2   // we terminated because we run out of iterations
+
 // must be bigger than bounce count
 #define INVALID_DEPTH 1000000
 
@@ -69,6 +73,7 @@ struct Ray
 #define MATERIAL_WOOD 20           // wood. uses the material_position
 #define MATERIAL_MARBLE_DARK 21    // dark marble. uses the material_position
 #define MATERIAL_MARBLE_LIGHT 22   // light marble. uses the material position
+#define MATERIAL_FIRE 23           // a flame effect. uses the material position
 
 // makros for convenience
 #define OBJECT(distance) output_scene_distance = min(output_scene_distance, distance)
@@ -364,7 +369,6 @@ void ps_main(ps_input input, out ps_output output)
 						uint new_ray_index = find_free_ray(rays);
 
 						float3 ref_vec = reflect(geometry_input.dir.xyz, new_normal);
-						// start a new ray
 
 						rays[new_ray_index].pos = geometry_input.pos + ref_vec * reflect_eps;
 						rays[new_ray_index].dir = ref_vec;
@@ -389,7 +393,6 @@ void ps_main(ps_input input, out ps_output output)
 						if (current_ray.inside_sign > 0.f) // just entering the material
 						{
 							float3 ref_vec = refract(geometry_input.dir.xyz, new_normal, 1.f / material_output.optical_index);
-							// start a new ray
 
 							rays[new_ray_index].pos = geometry_input.pos + ref_vec * refract_eps;
 							rays[new_ray_index].dir = ref_vec;
@@ -404,7 +407,6 @@ void ps_main(ps_input input, out ps_output output)
 						else // leaving the material
 						{
 							float3 ref_vec = refract(geometry_input.dir.xyz, -new_normal, material_output.optical_index);
-							// start a new ray
 
 							rays[new_ray_index].pos = geometry_input.pos + ref_vec * refract_eps;
 							rays[new_ray_index].dir = ref_vec;
@@ -416,26 +418,6 @@ void ps_main(ps_input input, out ps_output output)
 							rays[new_ray_index].is_shadow_ray = false;
 							rays[new_ray_index].depth = current_ray.depth + 2;
 						}
-						++ray_count;
-					}
-				}
-
-				// handle transparent material
-				if (material_output.diffuse_color.a < 1.f && current_ray.depth + 2 < material_output.max_cost)
-				{
-					if (ray_count < RAY_COUNT)
-					{
-						uint new_ray_index = find_free_ray(rays);
-
-						rays[new_ray_index].pos = geometry_input.pos;
-						rays[new_ray_index].dir = geometry_input.dir.xyz;
-						rays[new_ray_index].contribution = (1.f - material_output.diffuse_color.a) * material_output.diffuse_color.rgb * current_ray.contribution;
-						rays[new_ray_index].inside_sign = 1.f;
-						rays[new_ray_index].last_transparent_pos = geometry_input.pos;
-						rays[new_ray_index].has_transparent = true;
-						rays[new_ray_index].shadow_range = 0.f;
-						rays[new_ray_index].is_shadow_ray = false;
-						rays[new_ray_index].depth = current_ray.depth + 2;
 						++ray_count;
 					}
 				}
@@ -458,7 +440,7 @@ void ps_main(ps_input input, out ps_output output)
 				}
 				else if (material_output.material_id == MATERIAL_NORMAL1)
 				{
-					float3 normal_color = max(0.01f, new_normal);// *0.5f + 0.5f;
+					float3 normal_color = max(0.01f, new_normal);
 					normal_color = normal_color / max(max(normal_color.r, normal_color.g), normal_color.b);
 					color += normal_color;
 					use_light = false;
@@ -488,6 +470,34 @@ void ps_main(ps_input input, out ps_output output)
 				else if (material_output.material_id == MATERIAL_MARBLE_LIGHT)
 				{
 					diffuse_color += marble(material_output.material_position.xyz, float3(0.7f, 0.7f, 0.7f));
+				}
+				else if (material_output.material_id == MATERIAL_FIRE)
+				{
+					float fadeout = saturate(dot(-geometry_input.dir.xyz, new_normal));
+					float4 fire_color = fire(material_output.material_position.xyz, 1.f - fadeout);
+					color += fire_color.rgb;
+					material_output.diffuse_color.a = saturate(fire_color.a);
+					material_output.diffuse_color.rgb = float3(1.f, 1.f, 1.f);
+				}
+
+				// handle transparent material
+				if (material_output.diffuse_color.a < 1.f && current_ray.depth + 2 < material_output.max_cost)
+				{
+					if (ray_count < RAY_COUNT)
+					{
+						uint new_ray_index = find_free_ray(rays);
+
+						rays[new_ray_index].pos = geometry_input.pos;
+						rays[new_ray_index].dir = geometry_input.dir.xyz;
+						rays[new_ray_index].contribution = (1.f - material_output.diffuse_color.a) * material_output.diffuse_color.rgb * current_ray.contribution;
+						rays[new_ray_index].inside_sign = 1.f;
+						rays[new_ray_index].last_transparent_pos = geometry_input.pos;
+						rays[new_ray_index].has_transparent = true;
+						rays[new_ray_index].shadow_range = 0.f;
+						rays[new_ray_index].is_shadow_ray = false;
+						rays[new_ray_index].depth = current_ray.depth + 2;
+						++ray_count;
+					}
 				}
 
 				if (use_light)
@@ -554,8 +564,8 @@ void ps_main(ps_input input, out ps_output output)
 
 							light_influenced_color += material_output.specular_color.rgb * light_color * specular_factor;
 
-							// now handle the shadow with another ray
-							if (current_ray.depth + 2 < material_output.max_cost)
+							// now handle the shadow with another ray, but only if we are not already in a shaded region
+							if (current_ray.depth + 2 < material_output.max_cost && light_dot > 0.f)
 							{
 								if (ray_count < RAY_COUNT)
 								{
