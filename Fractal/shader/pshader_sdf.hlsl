@@ -240,6 +240,18 @@ uint find_free_ray(Ray rays[RAY_COUNT])
 	return index;
 }
 
+// rays: array of all rays
+// ray_count: how many of these are active
+// current_ray: the currently traced ray
+// right_ray_vec: the offset of a pixel to the right relative to the camera distance
+// bottom_ray_vec: the offset of a pixel to the bottom relative to the camera distance
+float3 handle_ray(inout Ray rays[RAY_COUNT], inout uint ray_count, Ray current_ray, inout float hdr_output, float3 right_ray_vec, float3 bottom_ray_vec)
+{
+	float3 output_color = float3(0.f, 0.f, 0.f);
+	
+	return output_color;
+}
+
 void ps_main(ps_input input, out ps_output output)
 {
 	// calculate main ray
@@ -266,21 +278,17 @@ void ps_main(ps_input input, out ps_output output)
 
 	float hdr_output = -1.f;
 	output.color = float4(0.f, 0.f, 0.f, 0.f);
-	for (uint bounce = 0; bounce < BOUNCE_COUNT; ++bounce)
+	for (uint bounce = 0; bounce < BOUNCE_COUNT && ray_count > 0; ++bounce)
 	{
+		// get next ray
 		uint ray_index = find_next_ray(rays);
-		// find a valid ray
-		if (rays[ray_index].depth == INVALID_DEPTH) // no more rays, abort
-		{
-			break;
-		}
-
 		Ray current_ray = rays[ray_index];
 
-		rays[ray_index].depth = INVALID_DEPTH; // disable original ray
+		// disable original ray
+		rays[ray_index].depth = INVALID_DEPTH;
 		--ray_count;
 
-		//output.color.rgb += handle_ray(rays, ray_count, current_ray, hdr_output, right_ray_vec, bottom_ray_vec);
+		//float3 output_color = handle_ray(rays, ray_count, current_ray, hdr_output, right_ray_vec, bottom_ray_vec);
 		float3 output_color = float3(0.f, 0.f, 0.f);
 		// march geometry
 		GeometryInput geometry_input;
