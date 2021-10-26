@@ -45,7 +45,6 @@ struct Ray
 	float inside_sign;
 	float3 last_transparent_pos;
 	bool has_transparent;
-	float3 shadow_contribution;
 	float shadow_range;
 	bool is_shadow_ray;
 	uint depth;
@@ -260,7 +259,6 @@ void ps_main(ps_input input, out ps_output output)
 	rays[0].inside_sign = 1.f;
 	rays[0].last_transparent_pos = float3(0.f, 0.f, 0.f);
 	rays[0].has_transparent = false;
-	rays[0].shadow_contribution = float3(0.f, 0.f, 0.f);
 	rays[0].shadow_range = 0.f;
 	rays[0].is_shadow_ray = false;
 	rays[0].depth = 0;
@@ -282,21 +280,23 @@ void ps_main(ps_input input, out ps_output output)
 		rays[ray_index].depth = INVALID_DEPTH; // disable original ray
 		--ray_count;
 
+		//output.color.rgb += handle_ray(rays, ray_count, current_ray, hdr_output, right_ray_vec, bottom_ray_vec);
+		float3 output_color = float3(0.f, 0.f, 0.f);
 		// march geometry
 		GeometryInput geometry_input;
-		geometry_input.pos = rays[ray_index].pos;
-		geometry_input.dir.xyz = rays[ray_index].dir;
+		geometry_input.pos = current_ray.pos;
+		geometry_input.dir.xyz = current_ray.dir;
 		geometry_input.dir.w = 1.f;
 		geometry_input.right_ray_offset = right_ray_vec;
 		geometry_input.bottom_ray_offset = bottom_ray_vec;
 
 		MarchingInput marching_input;
 		marching_input.is_inside = false;
-		marching_input.has_transparent = rays[ray_index].has_transparent;
-		marching_input.last_transparent_pos = rays[ray_index].last_transparent_pos;
+		marching_input.has_transparent = current_ray.has_transparent;
+		marching_input.last_transparent_pos = current_ray.last_transparent_pos;
 		marching_input.is_shadow_pass = current_ray.is_shadow_ray;
 
-		float max_range = current_ray.is_shadow_ray ? rays[ray_index].shadow_range : RANGE;
+		float max_range = current_ray.is_shadow_ray ? current_ray.shadow_range : RANGE;
 
 		uint iter_count;
 		float scene_distance;
@@ -364,7 +364,6 @@ void ps_main(ps_input input, out ps_output output)
 						rays[new_ray_index].inside_sign = 1.f;
 						rays[new_ray_index].last_transparent_pos = float3(0.f, 0.f, 0.f);
 						rays[new_ray_index].has_transparent = false;
-						rays[new_ray_index].shadow_contribution = float3(0.f, 0.f, 0.f);
 						rays[new_ray_index].shadow_range = 0.f;
 						rays[new_ray_index].is_shadow_ray = false;
 						rays[new_ray_index].depth = current_ray.depth + 3;
@@ -390,7 +389,6 @@ void ps_main(ps_input input, out ps_output output)
 							rays[new_ray_index].inside_sign = -1.f;
 							rays[new_ray_index].last_transparent_pos = float3(0.f, 0.f, 0.f);
 							rays[new_ray_index].has_transparent = false;
-							rays[new_ray_index].shadow_contribution = float3(0.f, 0.f, 0.f);
 							rays[new_ray_index].shadow_range = 0.f;
 							rays[new_ray_index].is_shadow_ray = false;
 							rays[new_ray_index].depth = current_ray.depth + 2;
@@ -406,7 +404,6 @@ void ps_main(ps_input input, out ps_output output)
 							rays[new_ray_index].inside_sign = 1.f;
 							rays[new_ray_index].last_transparent_pos = float3(0.f, 0.f, 0.f);
 							rays[new_ray_index].has_transparent = false;
-							rays[new_ray_index].shadow_contribution = float3(0.f, 0.f, 0.f);
 							rays[new_ray_index].shadow_range = 0.f;
 							rays[new_ray_index].is_shadow_ray = false;
 							rays[new_ray_index].depth = current_ray.depth + 2;
@@ -428,7 +425,6 @@ void ps_main(ps_input input, out ps_output output)
 						rays[new_ray_index].inside_sign = 1.f;
 						rays[new_ray_index].last_transparent_pos = geometry_input.pos;
 						rays[new_ray_index].has_transparent = true;
-						rays[new_ray_index].shadow_contribution = float3(0.f, 0.f, 0.f);
 						rays[new_ray_index].shadow_range = 0.f;
 						rays[new_ray_index].is_shadow_ray = false;
 						rays[new_ray_index].depth = current_ray.depth + 2;
@@ -559,11 +555,10 @@ void ps_main(ps_input input, out ps_output output)
 
 									rays[new_ray_index].pos = scene_pos;
 									rays[new_ray_index].dir = -lighting_dir;
-									rays[new_ray_index].contribution = float3(0.f, 0.f, 0.f);
+									rays[new_ray_index].contribution = light_influenced_color * current_ray.contribution * saturate(material_output.diffuse_color.a);
 									rays[new_ray_index].inside_sign = 1.f;
 									rays[new_ray_index].last_transparent_pos = float3(0.f, 0.f, 0.f);
 									rays[new_ray_index].has_transparent = false;
-									rays[new_ray_index].shadow_contribution = light_influenced_color * current_ray.contribution * saturate(material_output.diffuse_color.a);
 									rays[new_ray_index].shadow_range = distance_to_trace;
 									rays[new_ray_index].is_shadow_ray = true;
 									rays[new_ray_index].depth = current_ray.depth + 2;
@@ -580,7 +575,7 @@ void ps_main(ps_input input, out ps_output output)
 					color *= saturate(material_output.diffuse_color.a);
 				}
 
-				output.color.rgb += color * current_ray.contribution;
+				output_color += color * current_ray.contribution;
 			}
 			else // shadow ray did not hit -> check why
 			{
@@ -593,11 +588,10 @@ void ps_main(ps_input input, out ps_output output)
 
 						rays[new_ray_index].pos = geometry_input.pos;
 						rays[new_ray_index].dir = geometry_input.dir.xyz;
-						rays[new_ray_index].contribution = float3(0.f, 0.f, 0.f);
 						rays[new_ray_index].inside_sign = 1.f;
 						rays[new_ray_index].last_transparent_pos = geometry_input.pos;
 						rays[new_ray_index].has_transparent = true;
-						rays[new_ray_index].shadow_contribution = (1.f - material_output.diffuse_color.a) * material_output.diffuse_color.rgb * current_ray.shadow_contribution;
+						rays[new_ray_index].contribution = (1.f - material_output.diffuse_color.a) * material_output.diffuse_color.rgb * current_ray.contribution;
 						rays[new_ray_index].shadow_range = max_range - geometry_input.camera_distance; // reduce by the already traveled distance
 						rays[new_ray_index].is_shadow_ray = true;
 						rays[new_ray_index].depth = current_ray.depth + 2;
@@ -610,14 +604,15 @@ void ps_main(ps_input input, out ps_output output)
 		{
 			if (current_ray.is_shadow_ray) // shadow ray missed -> light
 			{
-				output.color.rgb += current_ray.shadow_contribution;
+				output_color += current_ray.contribution;
 			}
 			else // normal ray missed -> background
 			{
 				float3 background_color = map_background(geometry_input.dir.xyz, iter_count);
-				output.color.rgb += background_color * current_ray.contribution;
+				output_color += background_color * current_ray.contribution;
 			}
 		}
+		output.color.rgb += output_color;
 	}
 
 	// hdr_output is either -1 (not set), 0 (disable), or 1 (enable)
