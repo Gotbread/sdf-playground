@@ -1,5 +1,6 @@
 #include "sdf_primitives.hlsl"
-
+#include "sdf_ops.hlsl"
+#include "sdf_common.hlsl"
 
 // occupies the negative xyz octant
 float sdCorner(float3 pos)
@@ -35,26 +36,8 @@ float sdSpiral(float3 pos, float r1, float h, float r2, float angle_start, float
 	return min(body_length, min(length(pos - cap1) - r2, length(pos - cap2) - r2));
 }
 
-// params:
-// pos.xyz: 3D position in the scene
-// pos.w: one when rendering with transparent objects, zero without
-// 
-// dir: input normal. normalized to 1 for normal passes, zero for gradient-only passes
-// 
-// return value:
-// x: scene distance
-// y: material ID
-//
-// material_property:
-// extra vector, meaning depends on material
-float2 map(float4 pos, float3 dir, out float3 material_property)
+void map(GeometryInput geometry, MarchingInput march, MaterialInput material_input, inout MaterialOutput material_output, bool geometry_step, inout float output_scene_distance)
 {
-	// testing
-	//float sphere = sdSphere(pos.xyz - float3(0.f, 1.f, 0.f), 0.5f);
-	/*float box1 = sdBox(pos.xyz - float3(+1.f, 3.f, +1.f), float3(2.f, 2.f, 2.f));
-	float box2 = sdBox(pos.xyz - float3(-1.f, 5.f, -1.f), float3(2.f, 2.f, 2.f));
-	float obj = length(float2(box1, box2)) - 0.2f;*/
-
 	float speed = 1.5f;
 	float total_x = stime * speed;
 
@@ -75,7 +58,7 @@ float2 map(float4 pos, float3 dir, out float3 material_property)
 
 	float spring_s = sin(spring_angle), spring_c = cos(spring_angle);
 
-	float3 spring_pos = pos.xyz;
+	float3 spring_pos = geometry.pos.xyz;
 	spring_pos.y -= (y_top + y_bottom) * 0.5f + 0.1f;
 	spring_length = y_top - y_bottom;
 
@@ -83,29 +66,35 @@ float2 map(float4 pos, float3 dir, out float3 material_property)
 
 	float obj = sdSpiral(spring_pos + float3(0.f, spring_length * 0.5f, 0.f), 1.f, spring_length, 0.1f, 0.f, 4.5f * tau) * 0.98f;
 
-	pos.x += x;
+	geometry.pos.x += x;
 
-	// floor
-	float floor1 = sdPlaneFast(pos.xyz, dir, float3(0.f, 1.f, 0.f));
+	map_groundplane(geometry, material_output, geometry_step, output_scene_distance);
 
-	// select
-	if (obj < floor1)
+	if (geometry_step)
 	{
-		material_property = float3(0.5f, 0.5f, 0.5f);
-		return float2(obj, 3.f);
+		OBJECT(obj);
 	}
 	else
 	{
-		float2 tile_pos = floor(pos.xz);
-		float tile_parity = round(frac((tile_pos.x + tile_pos.y) * 0.5f + 0.25f));
-		float3 tile_color = tile_parity > 0.5f ? float3(0.3f, 0.3f, 0.3f) : float3(0.9f, 0.9f, 0.9f);
-		float3 neutral_color = float3(0.6f, 0.6f, 0.6f);
-		float tile_lod = saturate((length(pos.xyz - eye) - 30.f) / 40.f);
-		material_property = lerp(tile_color, neutral_color, tile_lod);
-		return float2(floor1, 3.f);
+		if (MATERIAL(obj))
+		{
+			material_output.diffuse_color.rgb = 0.5f;
+		}
 	}
 }
 
+void map_normal(GeometryInput geometry, inout NormalOutput output)
+{
+}
 
+void map_light(GeometryInput input, inout LightOutput output[LIGHT_COUNT], inout float ambient_lighting_factor)
+{
+	output[0].used = true;
+	output[0].pos = float4(-1.f, -1.f, 2.f, 1.f);
+	output[0].color = float3(1.f, 1.f, 1.f);
+}
 
-
+float3 map_background(float3 dir, uint iter_count)
+{
+	return sky_color(dir, stime);
+}

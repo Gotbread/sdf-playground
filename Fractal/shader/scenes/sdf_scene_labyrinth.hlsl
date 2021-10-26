@@ -1,5 +1,6 @@
 #include "sdf_primitives.hlsl"
 #include "sdf_ops.hlsl"
+#include "sdf_common.hlsl"
 
 float vase(float3 pos)
 {
@@ -17,22 +18,12 @@ float vase(float3 pos)
 	return d;
 }
 
-// params:
-// pos.xyz: 3D position in the scene
-// pos.w: one when rendering with transparent objects, zero without
-// 
-// dir: input normal. normalized to 1 for normal passes, zero for gradient-only passes
-// 
-// return value:
-// x: scene distance
-// y: material ID
-//
-// material_property:
-// extra vector, meaning depends on material
-float2 map(float4 pos, float3 dir, out float3 material_property)
+void map(GeometryInput geometry, MarchingInput march, MaterialInput material_input, inout MaterialOutput material_output, bool geometry_step, inout float output_scene_distance)
 {
+	map_groundplane(geometry, material_output, geometry_step, output_scene_distance);
+	
 	// wall
-	float3 wall_pos = pos.xyz;
+	float3 wall_pos = geometry.pos.xyz;
 	wall_pos.xz = opRepInf(wall_pos.xz, float2(20.f, 20.f));
 	wall_pos.xz = abs(wall_pos.xz);
 	if (wall_pos.z > wall_pos.x)
@@ -61,35 +52,52 @@ float2 map(float4 pos, float3 dir, out float3 material_property)
 	float wood = sdBox(wood_pos - float3(0.f, 0.6f, 0.f), float3(0.05f, 0.5f, 0.05f));
 	float fire = sdRoundCone(torch_pos, float3(0.f, 1.1f, 0.f), float3(0.f, 1.6f, 0.f), 0.15f, 0.1f);
 
-	// floor
-	float floor1 = sdPlaneFast(pos.xyz, dir, float3(0.f, 1.f, 0.f));
+	float transparent_fire = sdRoundCone(march.last_transparent_pos, float3(0.f, 1.1f, 0.f), float3(0.f, 1.6f, 0.f), 0.15f, 0.1f);
 
-	// select
-	if (pos.w > 0.5f && fire < wood && fire < floor1 && fire < obj1 && fire < wall) // fire
+	if (geometry_step)
 	{
-		material_property = torch_pos.xyz * 3.f - float3(0.f, stime * 3.f, 0.f);
-		return float2(fire, 100.f);
-	}
-	else if (wood < floor1 && wood < obj1 && wood < wall) // wood
-	{
-		material_property = pos.xzy * 2.f;
-		return float2(wood, 6.f);
-	}
-	else if (obj1 < wall && obj1 < floor1) // obj
-	{
-		material_property = pos.xyz * 3.f;
-		return float2(obj1, 4.f);
-	}
-	else if (wall < floor1) // wall
-	{
-		material_property = pos.xyz;
-		return float2(wall, 5.f);
+		OBJECT(wall);
+		OBJECT(obj1);
+		OBJECT(wood);
+		OBJECT_TRANSPARENT(fire, transparent_fire);
 	}
 	else
 	{
-		float2 tile_pos = floor(pos.xz);
-		float tile_parity = round(frac((tile_pos.x + tile_pos.y) * 0.5f + 0.25f));
-		material_property = tile_parity > 0.5f ? float3(0.1f, 0.1f, 0.1f) : float3(0.8f, 0.8f, 0.8f);
-		return float2(floor1, 3.f);
+		if (MATERIAL(wall))
+		{
+			material_output.material_position.rgb = geometry.pos.xyz;
+			material_output.material_id = MATERIAL_MARBLE_LIGHT;
+		}
+		else if (MATERIAL(obj1))
+		{
+			material_output.material_position.rgb = geometry.pos.xyz * 3.f;
+			material_output.material_id = MATERIAL_MARBLE_DARK;
+		}
+		else if (MATERIAL(wood))
+		{
+			material_output.material_position.rgb = geometry.pos.xzy * 2.f;
+			material_output.material_id = MATERIAL_WOOD;
+		}
+		else if (MATERIAL(fire))
+		{
+			material_output.material_position.rgb = torch_pos.xyz * 3.f - float3(0.f, stime * 3.f, 0.f);
+			material_output.material_id = MATERIAL_FIRE;
+		}
 	}
+}
+
+void map_normal(GeometryInput geometry, inout NormalOutput output)
+{
+}
+
+void map_light(GeometryInput input, inout LightOutput output[LIGHT_COUNT], inout float ambient_lighting_factor)
+{
+	output[0].used = true;
+	output[0].pos = float4(-1.f, -1.f, 2.f, 1.f);
+	output[0].color = float3(1.f, 1.f, 1.f);
+}
+
+float3 map_background(float3 dir, uint iter_count)
+{
+	return sky_color(dir, stime);
 }
