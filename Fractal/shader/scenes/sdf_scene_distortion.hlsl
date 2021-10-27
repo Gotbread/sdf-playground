@@ -46,7 +46,6 @@ void map(GeometryInput geometry, MarchingInput march, MaterialInput material_inp
 			float3 color = val < 0.15f ? color_gap : color_wall;
 			material_output.diffuse_color.rgb = color;
 			material_output.specular_color.rgb = 0.125f;
-			material_output.material_id = MATERIAL_ITER;
 		}
 	}
 }

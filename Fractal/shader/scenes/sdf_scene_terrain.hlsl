@@ -37,7 +37,7 @@ float sdFbm(float3 p, float d)
                      -1.60, 0.72, -0.96,
                      -1.20, -0.96, 1.28 };
     float s = 1.0;
-    for (int i = 0; i < 2; i++)
+    for (int i = 0; i < (int)VAR_levels(min=1, max=10, step=1, start=2); i++)
     {
         // evaluate new octave
         float n = s * sdBase(p);
@@ -48,6 +48,7 @@ float sdFbm(float3 p, float d)
 
         // prepare next octave
         p = mul(mat, p);
+        p.xz = opRotate(p.xz, 1.f);
         s = 0.5 * s;
     }
     return d;
