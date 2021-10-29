@@ -84,6 +84,12 @@ This is the basic scene you see when starting the engine. It showcases some simp
 ![Fractal 2](Images/sierpinski.png)
 Another fractal done by recursive strategy. Works correctly with lights and shadows.
 
+![Fractal 3 with Sierpinski Triangle](Images/fractal2.png)
+This fractal has been extended to include some extra corner pieces, giving it a more "full" look. As a nice side effect, when sliced diagonally, it's cross section creates a sierpinski triangle.
+
+![Forest of jumping trees](Images/forest.png)
+The recursive modeling can also be used to make tree structures. They do include a lot of branches. Additionally the position of the trees is randomized with a voronoi pattern.
+
 ![Shell of a half cube](Images/shell.png)
 Here we have a "shell" operator which creates an extra surrounding layer like a casting form. In this scene it is applied twice. Can be used to generate complex geometry quickly.
 
