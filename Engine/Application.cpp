@@ -141,6 +141,9 @@ LRESULT CALLBACK Application::WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM
 			case 'V': // variable manager
 				variable_manager.Open();
 				break;
+			case 'U': // reset timer
+				stime = 0.f;
+				break;
 			}
 		}
 		else
