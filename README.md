@@ -1,4 +1,4 @@
-# sdf-playground
+# SDF-Playground
 
 A small graphics engine for demos, small games, and playing around with SDFs in general.
 
