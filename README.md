@@ -27,12 +27,26 @@ In order to apply colors and materials to the scene, we not only find the closes
 
 ## Effects
 
-Light
-Shadow
-Transparency
-Relfection
-Refraction
-HDR
+![Glowing sphere in mirror](Images/neon.png)
+Here we see the several things in action:
+- the sphere is glowing, showcasing the bloom effect and the HDR pipeline
+- the mirror is reflecting the scene, showing the reflections.
+- the object itself is one single SDF, showing how one can create simple 2D SDFs and revolve them into a 3D shape. All parameters adjustable in realtime!
+
+![Transparent blocks](Images/transparency.png)
+The engine also supports transparent material. Looking through a transparent or semitransparent material will give the correct result. It also supports coloring the shadows of transparent objects.
+
+![Floating gems](Images/gems.png)
+Here we have flowing gems, which were created by the intersection of 3 planes, and a clever rotation. The gem was replicated using another rotation operation. Also the gems include correct refraction.
+
+![Labyrinth](Images/labyrinth.png)
+This scene shows how one can easily get an infinite sized level by mirroring and repeating simple geometry. The walls are just 2 blocks and some folding operations. Also, the bowls show a fancy merge operation, adding these rounded lines on the intersection point to enrich the geometry. Additionally we have a fire effect going on, which is a fully procedural texture.
+
+![Lenses](Images/lense1.png)
+Here we have a fully working lense, made from 3 spheres and some boolean operations. It behaves like a lense would, refracting on both surfaces. Additionally we have a glass panel behind it, having reflection as well as refraction, showcasing how the engine can handle both at the same time (if your GPU can handle this)
+
+![Many lightsources](Images/multi-lights.png)
+Each scene can define up to 8 light sources at the same time, which can either be directional or a point light. They also cast correct shadows which can overlap
 
 ![Reflections](Images/cube-sea.png)
 The yellow cubes have a reflective material applied to them. Also note how we can have an infinite amount of them without much higher cost.
@@ -69,6 +83,25 @@ This is the basic scene you see when starting the engine. It showcases some simp
 
 ![Fractal 2](Images/sierpinski.png)
 Another fractal done by recursive strategy. Works correctly with lights and shadows.
+
+![Shell of a half cube](Images/shell.png)
+Here we have a "shell" operator which creates an extra surrounding layer like a casting form. In this scene it is applied twice. Can be used to generate complex geometry quickly.
+
+![Spiral jumping](Images/spiral.png)
+Here we have a rather complex SDF primitive. The entire spiral is described by one SDF. It can be fully adjusted regarding the height, number of revolutions, starting angles, etc...
+
+![Vase on table](Images/table.png)
+Here we have 2 interesting features:
+- a vase described by 3 spheres and a cut plane. The rest is combinating and smoothing them.
+- a table with a wooden texture. The texture is fully procedural and is offset every so often to give the impression of individual pieces of wood glued together.
+
+![Gyroid](Images/gyroid.png)
+This shape also known as a gyroid is a very complex shape resulting from trigonometric operations. It would be very hard to render with a polygon engine, but for an SDF engine this is no problem. It would be infinite in size, so it was cut to allow a better view.
+
+![Variable manager](Images/variable-manager.png)
+When you want to test out some values in the shader, changing the value and recompiling it each time is too time consuming. Thus we introduced the variable manager. With a simple syntax:
+`VAR_name(min=0, max=10, step=0.5, start=2)`
+you can define a new variable with the name `name`, as well as give it minimum, maximum, default and step parameters. Each parameter is optional. When you compile a shader with this variable, it will appear in the variable manager list with a slider. Moving the slider updates the value in the shader in realtime. This makes testing values very quick.
 
 ## Getting started
 
